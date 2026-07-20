@@ -1,11 +1,14 @@
 import requests as r
 
 from test_piper import speak_neral
+from test_ears import listen_neural
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL_NAME = "qwen2.5-coder:1.5b"
+from config import OLLAMA_URL, MODEL_NAME
 
 def send_to_jarvis(user_message : str) -> str:
+
+    if not OLLAMA_URL or not MODEL_NAME:
+        return "Error: Ollama configuration is missing. Check OLLAMA_URL and MODEL_NAME."
 
     payload : dict = {
         "model" : MODEL_NAME,
@@ -27,18 +30,20 @@ def send_to_jarvis(user_message : str) -> str:
 if __name__ == "__main__":
     try:
         while True:
-            user_input = input("You: ").strip().lower()
-            if user_input == "quit":
+            user_input = input("You (type text or press Enter to talk): ").strip()
+            if user_input.lower() == "quit":
                 print("\n Jarvis: Shutting down. Goodbye, sir!")
                 speak_neral("Shutting down. Goodbye, sir!")
                 break
             elif user_input == "":
-                continue
-            else:
-                reply : str = send_to_jarvis(user_input)
-                if reply == "Error: Cannot connect to Ollama. Make sure the application is running in your system tray.":
-                    print(reply)
-                    break
+                user_input = listen_neural().strip()
+                if user_input == "":
+                    continue
+
+            reply : str = send_to_jarvis(user_input)
+            if reply == "Error: Cannot connect to Ollama. Make sure the application is running in your system tray.":
+                print(reply)
+                break
             print(f"Jarvis: {reply}")
             speak_neral(reply)
     except KeyboardInterrupt:
