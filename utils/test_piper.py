@@ -2,12 +2,23 @@ import numpy as np
 from piper import PiperVoice, SynthesisConfig
 import sounddevice as sd
 
-model_path = "./voice_models/en_GB-alan-medium.onnx"
+from config import SPEECH_SPEED, VOICE_MODEL_PATH
+
 print("Loading Piper model...")
-voice = PiperVoice.load(model_path)
+
+if not VOICE_MODEL_PATH:
+    raise ValueError("VOICE_MODEL_PATH is not set. Please check your .env file.")
+
+try:
+    voice = PiperVoice.load(VOICE_MODEL_PATH)
+    print("Piper model loaded successfully.")
+except Exception as e:
+    print(f"Error loading Piper model: {e}")
+    exit(1)
+
 config = SynthesisConfig(
-    length_scale= 1.0,
-    volume= 1.0,
+    length_scale=0.80,
+    volume=1.0,
 )
 
 def speak_neral(text: str):
