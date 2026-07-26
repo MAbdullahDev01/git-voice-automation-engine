@@ -23,7 +23,7 @@ def main():
             match user_input:
                 case "quit":
                     raise KeyboardInterrupt
-                case _ if "commit this" in user_input:
+                case _ if "commit changes" in user_input:
                     git_commit()
 
             reply = send_to_jarvis(user_input)

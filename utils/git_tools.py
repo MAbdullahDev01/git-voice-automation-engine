@@ -3,13 +3,13 @@ from subprocess import run, CalledProcessError
 from utils.jarvis import send_to_jarvis
 
 def run_command(command : list[str]) -> str:
+
     try:
         result = run(command, capture_output=True, text=True, check=True)
     except CalledProcessError as e:
         return f"Error: {e.stderr.strip()}"
 
     return result.stdout
-        
 
 def git_commit():
 
@@ -17,6 +17,7 @@ def git_commit():
     diff : str
     diff_staged : str = ""
     status : str
+    commit_message : str
     command : list[list[str]]
 
     command = [
@@ -33,8 +34,11 @@ def git_commit():
         print("No unstaged changes detected.")
         if diff_staged:
             print("Staged changes found")
-    else:
+
+    if not diff and not diff_staged:
         print("No changes detected. Nothing to commit.")
+        return
+    
     status = run_command(command[2])
 
     commit_message = send_to_jarvis(f"You are an expert Git assistant. Your job is to analyze the provided `git status` and `git diff` and output executable terminal commands. Rules:\n1. Always use Conventional Commits format for the commit message:\n   - feat: A new feature\n   - fix: A bug fix\n   - chore: Maintenance, dependency updates, or tool config\n   - docs: Documentation changes\n   - style: Code style/formatting changes with no logic change\n   - refactor: Code restructuring without adding features or fixing bugs\n2. Keep the commit title concise (under 50 characters).\n3. Output ONLY the raw CLI commands to execute, separated by newlines. No extra commentary or markdown formatting.\n\nExample Output Format:\n git add <file1> <file2>\n git commit -m \"feat(stt): add push-to-talk key suppression\"\n git push\n\nBased on the following git diff:\n{diff}\nAnd the following staged diff:\n{diff_staged}\nAnd the following status:\n{status}\n\nPlease create a concise commit message.")
