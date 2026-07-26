@@ -26,10 +26,10 @@ def main():
                 case _ if "commit changes" in user_input:
                     git_commit()
 
-            reply = send_to_jarvis(user_input)
-
-            print(f"Jarvis: {reply}")
-            speak_neral(reply)
+                case _:
+                    reply = send_to_jarvis(user_input)
+                    print(f"Jarvis: {reply}")
+                    speak_neral(reply)
 
     except KeyboardInterrupt:
         print("\nJarvis: Shutting down. Goodbye, sir!")
