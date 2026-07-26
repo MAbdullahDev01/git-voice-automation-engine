@@ -2,7 +2,7 @@ import numpy as np
 from piper import PiperVoice, SynthesisConfig
 import sounddevice as sd
 
-from config import SPEECH_SPEED, VOICE_MODEL_PATH
+from config import SPEECH_SPEED,SPEECH_VOLUME, VOICE_MODEL_PATH
 
 print("Loading Piper model...")
 
@@ -17,8 +17,8 @@ except Exception as e:
     exit(1)
 
 config = SynthesisConfig(
-    length_scale=0.80,
-    volume=1.0,
+    length_scale=SPEECH_SPEED,
+    volume=SPEECH_VOLUME,
 )
 
 def speak_neral(text: str):
