@@ -1,5 +1,8 @@
+from pathlib import Path
 import requests as r
+import sys
 
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 from config import OLLAMA_URL, MODEL_NAME
 
 def send_to_jarvis(user_message: str) -> str:

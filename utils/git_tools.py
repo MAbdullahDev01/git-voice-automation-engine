@@ -103,5 +103,40 @@ Write ONLY the commit message:"""
             run_command(["git", "reset"])
             print("Commit cancelled and changes unstaged.")
 
+def git_create_branch(branch_name : str):
+
+    command : list[str] = ["git", "switch", "-c", branch_name]
+
+    _ = run_command(command)
+    print("Created branch:", branch_name)
+
+def git_delete_branch(branch_name : str):
+
+    command : list[str] = ["git", "branch", "-D", branch_name]
+
+    _ = run_command(command)
+    print("Deleted branch:", branch_name)
+
+def git_switch_branch(branch_name : str):
+
+    command : list[str] = ["git", "switch", branch_name]
+
+    _ = run_command(command)
+    print("Switched to branch:", branch_name)
+
+def git_list_branches() -> list[str]:
+
+    command : list[str] = ["git", "branch"]
+
+    result = run_command(command)
+    branches = [line.strip().lstrip("* ").strip() for line in result.splitlines()]
+    return branches
+
+def git_current_branch() -> str:
+    command : list[str] = ["git", "branch", "--show-current"]
+
+    result = run_command(command)
+    return result.strip()
+
 if __name__ == "__main__":
-    git_commit()
+    pass

@@ -1,7 +1,10 @@
 import numpy as np
+from pathlib import Path
 from piper import PiperVoice, SynthesisConfig
 import sounddevice as sd
+import sys
 
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 from config import SPEECH_SPEED,SPEECH_VOLUME, VOICE_MODEL_PATH
 
 print("Loading Piper model...")
