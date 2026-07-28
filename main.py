@@ -1,7 +1,7 @@
 from utils.test_piper import speak_neral
 from utils.test_ears import listen_neural
 from utils.jarvis import send_to_jarvis
-from utils.git_tools import git_commit, git_create_branch, git_current_branch, git_delete_branch, git_list_branches, git_switch_branch
+from utils.git_commands import git_commit, git_create_branch, git_current_branch, git_delete_branch, git_list_branches, git_switch_branch
 
 def main():
 
@@ -12,7 +12,7 @@ def main():
     try:
         while True:
             user_input = input("You (type text or press Enter to talk): ").lower().strip()
-            if user_input == "quit":
+            if user_input == "quit" or user_input == "exit" or user_input == "bye":
                 raise KeyboardInterrupt
             elif user_input == "":
                 user_input = listen_neural().lower().strip()
@@ -24,7 +24,7 @@ def main():
                 case "quit":
                     raise KeyboardInterrupt
                 case _ if "commit changes" in user_input:
-                    git_commit()
+                    git_commit(user_input)
                 case _ if "create branch" in user_input:
                     branch_name = user_input.split("create branch")[-1].strip()
                     if branch_name:
