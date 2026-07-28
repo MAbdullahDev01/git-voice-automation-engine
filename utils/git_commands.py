@@ -23,7 +23,7 @@ def git_commit(user_input : str):
         diff_staged = status
 
     context = get_context(user_input, status, diff_staged)
-    print("Context received from Jarvis:")
+    print("Context received from Jarvis.")
 
     # 3. Construct prompt with accurate staged diff
     prompt = f"""
