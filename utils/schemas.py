@@ -8,6 +8,9 @@ IntentType = Literal[
     "git_delete_branch",
     "git_list_branches",
     "git_current_branch",
+    "spotify_play",
+    "spotify_pause",
+    "spotify_skip",
     "general_chat"
 ]
 

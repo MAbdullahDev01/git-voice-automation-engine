@@ -1,3 +1,4 @@
+from utils.spotify_commands import play_music, pause_music, skip_track, previous_track
 from utils.test_piper import speak_neral
 from utils.test_ears import listen_neural
 from utils.jarvis import send_to_jarvis
@@ -63,8 +64,20 @@ def process_pipeline(user_input: str):
             print(f"Jarvis: {response}")
             speak_neral(response)
 
+        case "spotify_play":
+            play_music(query if query else "")
+
+        case "spotify_pause":
+            pause_music()
+
+        case "spotify_skip":
+            skip_track()
+
+        case "spotify_previous":
+            previous_track()
+
         case _:
-            print("⚠️ Unknown intent. Passing to fallback handler.")
+            print("Unknown intent. Passing to fallback handler.")
             response = send_to_jarvis(user_input)
             print(f"Jarvis: {response}")
             speak_neral(response)

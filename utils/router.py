@@ -19,7 +19,17 @@ AVAILABLE INTENTS:
    - query value: (no value needed)
 6. "git_current_branch": User wants to know the current git branch.
    - query value: (no value needed)
-7. "general_chat": Any conversational query, technical question, or coding help.
+7. "spotify_play": User wants to listen to music.
+   - QUERY RULE: Extract ONLY the raw song title and artist name. Remove action words like 'play', 'put on', 'listen to', single quotes, or extra symbols.
+   - Expand common abbreviations (e.g., 'thenbhd' -> 'The Neighbourhood').
+   - Example: "play reflections by thenbhd" -> Query: "Reflections The Neighbourhood"
+8. "spotify_pause": User wants to pause the currently playing music.
+   - query value: (no value needed)
+9. "spotify_skip": User wants to skip to the next track.
+   - query value: (no value needed)
+10. "spotify_previous": User wants to go back to the previous track.
+   - query value: (no value needed)
+11. "general_chat": Any conversational query, technical question, or coding help.
    - IMPORTANT FOR QUERY: Transform the user's raw/vague input into a highly concise, professional, clear, and context-rich prompt ready for a technical assistant.
 
 OUTPUT FORMAT:
