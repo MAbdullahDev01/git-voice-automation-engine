@@ -1,7 +1,7 @@
 import re
 from subprocess import run, CalledProcessError
 
-from utils.jarvis import send_to_jarvis
+from core.jarvis import send_to_jarvis
 
 def clean_commit_message(raw_output: str) -> str:
     """Extracts just the commit message string regardless of LLM formatting."""

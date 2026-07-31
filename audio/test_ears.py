@@ -2,7 +2,7 @@ import speech_recognition as sr
 import keyboard as k
 import time
 
-from utils.test_piper import speak_neral
+from audio.test_piper import speak_neral
 
 def listen_neural() -> str:
     recognizer = sr.Recognizer()

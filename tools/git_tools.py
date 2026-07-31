@@ -1,6 +1,5 @@
 from utils.helpers import clean_commit_message, get_context, run_command
-from utils.jarvis import send_to_jarvis
-
+from core.jarvis import send_to_jarvis
 
 def git_commit(context_input: str = ""):
     # 1. Check status first
@@ -108,3 +107,5 @@ def git_current_branch() -> str:
     command: list[str] = ["git", "branch", "--show-current"]
     result = run_command(command)
     return result.strip()
+
+# TODO: Add more git-related functions as needed, such as git_merge, git_rebase, etc.

@@ -1,6 +1,6 @@
 import json
 import ollama
-from utils.schemas import CommandPayload
+from core.schemas import CommandPayload
 
 ROUTER_SYSTEM_PROMPT = """
 You are the central Command Router for JARVIS, an AI co-pilot.
