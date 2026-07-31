@@ -21,7 +21,9 @@ else:
 
 try:
     from tools.git_tools import (
-        git_commit,
+        cancel_git_commit,
+        execute_git_commit,
+        generate_git_commit_message,
         git_create_branch,
         git_current_branch,
         git_delete_branch,
@@ -33,6 +35,9 @@ except Exception as exc:  # pragma: no cover - runtime fallback
     GIT_IMPORT_ERROR = exc
 else:
     GIT_IMPORT_ERROR = None
+
+
+PENDING_COMMIT_MSG = None
 
 
 def speak_text(text: str) -> None:
@@ -53,8 +58,21 @@ def listen_for_input() -> str:
 
 
 def process_pipeline(user_input: str, interactive: bool = True):
+    global PENDING_COMMIT_MSG
+
     try:
         print(f"\n[User Input]: {user_input}")
+
+        # Handle pending commit confirmation before routing new intent
+        if PENDING_COMMIT_MSG is not None:
+            choice = user_input.strip().lower()
+            if choice in ["y", "yes"]:
+                commit_message = PENDING_COMMIT_MSG
+                PENDING_COMMIT_MSG = None
+                return execute_git_commit(commit_message)
+
+            PENDING_COMMIT_MSG = None
+            return cancel_git_commit()
 
         if user_input in ["quit", "exit", "bye"]:
             raise KeyboardInterrupt
@@ -77,16 +95,26 @@ def process_pipeline(user_input: str, interactive: bool = True):
         match intent:
             case "git_commit":
                 print("Triggering Git Commit Tooling...")
-                if git_commit is None:
+                if generate_git_commit_message is None:
                     response_text = "Git tools are unavailable in this environment."
+                elif not interactive:
+                    commit_msg = generate_git_commit_message(query if query else user_input)
+                    if not commit_msg:
+                        response_text = "No changes detected to commit."
+                    else:
+                        PENDING_COMMIT_MSG = commit_msg
+                        response_text = f'Proposed Commit Message:\n"{commit_msg}"\n\nDo you want to proceed with this commit? (y/n)'
                 elif interactive:
-                    git_commit(query if query else user_input)
-                    response_text = "Git commit workflow completed."
-                else:
-                    response_text = (
-                        "Git commit workflow is interactive in CLI mode. "
-                        "Run the terminal workflow to confirm and push the commit."
-                    )
+                    commit_msg = generate_git_commit_message(query if query else user_input)
+                    if not commit_msg:
+                        response_text = "No changes detected to commit."
+                    else:
+                        print(f"\nGenerated Commit Message:\n--> {commit_msg}")
+                        confirm = input("Proceed with commit? (y/n): ").strip().lower()
+                        if confirm == "y":
+                            response_text = execute_git_commit(commit_msg)
+                        else:
+                            response_text = cancel_git_commit()
 
             case "git_create_branch":
                 if git_create_branch is None:
@@ -209,15 +237,15 @@ def run_cli():
     
     try:
         while True:
-            user_input = input("\nYou (type text or press Enter to talk): ").lower().strip()
+            user_input = input("\nYou (type text or press Enter to talk): ").strip()
             
             # Handle exit conditions upfront
-            if user_input in ["quit", "exit", "bye"]:
+            if user_input.lower() in ["quit", "exit", "bye"]:
                 raise KeyboardInterrupt
             
             # Trigger STT listening if input is empty (User pressed Enter)
             elif user_input == "":
-                user_input = listen_for_input().lower().strip()
+                user_input = listen_for_input().strip()
                 if not user_input:
                     continue
                 print(f"You (Spoke): {user_input}")

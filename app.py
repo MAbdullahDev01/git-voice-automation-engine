@@ -435,6 +435,29 @@ class JarvisMainWindow(QMainWindow):
         self.log_output.setFont(QFont("Consolas", 10))
         layout.addWidget(self.log_output, 1)
 
+        # --- Interactive Action Row (for Yes/No choices) ---
+        self.confirm_row = QWidget()
+        confirm_layout = QHBoxLayout(self.confirm_row)
+        confirm_layout.setContentsMargins(0, 0, 0, 0)
+        confirm_layout.setSpacing(10)
+
+        self.btn_yes = QPushButton("CONFIRM [Y]")
+        self.btn_yes.setStyleSheet(
+            f"background-color: {ACCENT_GREEN}; color: {BG_DARK}; font-weight: bold; border-radius: 12px; padding: 8px;"
+        )
+        self.btn_yes.clicked.connect(lambda: self._handle_confirmation("y"))
+
+        self.btn_no = QPushButton("CANCEL [N]")
+        self.btn_no.setStyleSheet(
+            f"background-color: {ACCENT_RED}; color: white; font-weight: bold; border-radius: 12px; padding: 8px;"
+        )
+        self.btn_no.clicked.connect(lambda: self._handle_confirmation("n"))
+
+        confirm_layout.addWidget(self.btn_yes)
+        confirm_layout.addWidget(self.btn_no)
+        self.confirm_row.setVisible(False)
+        layout.addWidget(self.confirm_row)
+
         input_row = QHBoxLayout()
         input_row.setSpacing(10)
 
@@ -454,6 +477,19 @@ class JarvisMainWindow(QMainWindow):
 
         self._append_system_line("JARVIS online. All systems nominal.")
         return panel
+
+    def prompt_user_confirmation(self, message: str):
+        self._append_system_line(message)
+        self.confirm_row.setVisible(True)
+        self.input_field.setEnabled(False)
+        self.send_btn.setEnabled(False)
+
+    def _handle_confirmation(self, choice: str):
+        self.confirm_row.setVisible(False)
+        self.input_field.setEnabled(True)
+        self.send_btn.setEnabled(True)
+        self.input_field.setText(choice)
+        self._send_command()
 
     def _set_state(self, state: str, sub_text: str | None = None):
         color = STATE_COLORS.get(state, ACCENT_CYAN)
@@ -501,6 +537,13 @@ class JarvisMainWindow(QMainWindow):
         self._set_state("speaking", "response ready")
         self._begin_jarvis_line()
         self._start_typing_effect(result)
+
+        # Trigger Y/N UI action buttons if confirmation is needed
+        if "(y/n)" in result.lower():
+            QTimer.singleShot(
+                len(result) * 16 + 200,
+                lambda: self.prompt_user_confirmation("Awaiting confirmation..."),
+            )
 
     def _on_pipeline_failed(self, error: str):
         self._set_state("error", "an error occurred")
