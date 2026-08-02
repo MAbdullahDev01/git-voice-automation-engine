@@ -1,6 +1,6 @@
-import json
-import ollama
 from core.schemas import CommandPayload
+from utils.groq import call_groq
+from utils.helpers import parse_llm_json
 
 ROUTER_SYSTEM_PROMPT = """
 You are the central Command Router for JARVIS, an AI co-pilot.
@@ -35,36 +35,25 @@ AVAILABLE INTENTS:
 OUTPUT FORMAT:
 You MUST reply strictly in valid JSON matching this schema:
 {
-  "intent": "<intent_name>",
-  "query": "<extracted_target_or_expanded_prompt>"
+   "intent": "<intent_name>",
+   "query": "<extracted_target_or_expanded_prompt>"
 }
 """
 
 def route_command(user_input: str) -> dict:
-    """Classifies user input and returns a dictionary with 'intent' and 'query'."""
-    
-    response = ollama.chat(
-        model="qwen2.5-coder:3b",
-        messages=[
-            {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
-            {"role": "user", "content": f"User Input: '{user_input}'"}
-        ],
-        options={
-            "temperature": 0.1,  # Low temp for deterministic classification
-            "num_predict": 120   # Keep output brief
-        }
-    )
-    
-    raw_content = response['message']['content']
-    
-    # Clean up potential markdown wrapper code fences
-    clean_json = raw_content.replace("```json", "").replace("```", "").strip()
-    
-    try:
-        data = json.loads(clean_json)
-        # Validate against schema
-        payload = CommandPayload(**data)
-        return payload.model_dump()
-    except Exception as e:
-        print(f"Router Parsing Error: {e}. Falling back to general chat.")
-        return {"intent": "general_chat", "query": user_input}
+   """Classifies user input and returns a dictionary with 'intent' and 'query'."""
+   prompt = f"User Input: {user_input}"
+   raw_response = call_groq(ROUTER_SYSTEM_PROMPT, prompt, json_mode=True, smart_model=False)
+   payload = parse_llm_json(raw_response)
+
+   try:
+      # Validate dictionary against Pydantic schema
+      validated_payload = CommandPayload.model_validate(payload)
+      return validated_payload.model_dump()
+      
+   except Exception as e:
+      print(f"Router Parsing Error: {e}. Falling back to general chat.")
+      return {
+         "intent": "general_chat", 
+         "query": user_input
+      }
