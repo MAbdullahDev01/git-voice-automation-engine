@@ -1,32 +1,8 @@
 import re
+import json
 from subprocess import run, CalledProcessError
 
 from core.jarvis import send_to_jarvis
-
-def clean_commit_message(raw_output: str) -> str:
-    """Extracts just the commit message string regardless of LLM formatting."""
-    # 1. Look for content inside quotes after -m (e.g., git commit -m "feat: my change")
-    match = re.search(r'git commit -m\s*["\']([^"\']+)["\']', raw_output)
-    if match:
-        return match.group(1).strip()
-    
-    # 2. Look for any line starting with conventional types (feat:, fix:, chore:, etc.)
-    match = re.search(r'^(feat|fix|chore|docs|style|refactor)(\(.*\))?:\s*.+$', raw_output, re.MULTILINE)
-    if match:
-        return match.group(0).strip()
-    
-    # 3. Fallback: Strip git commands, quotes, and backticks line by line
-    clean_lines = []
-    for line in raw_output.splitlines():
-        line = line.strip()
-        if not line or line.startswith("git add") or line.startswith("```"):
-            continue
-        line = re.sub(r'^git commit -m\s*', '', line)
-        line = line.strip('"\'` ')
-        if line:
-            clean_lines.append(line)
-            
-    return clean_lines[0] if clean_lines else "chore: update codebase"
 
 def run_command(command : list[str]) -> str:
 
@@ -49,3 +25,25 @@ def run_command(command : list[str]) -> str:
 
 def get_context(user_input, stage, diff,):
     return send_to_jarvis(f"Git status:\n{stage}\n\nGit diff:\n{diff}\n\nUser input:\n{user_input}\n\nPlease provide a commit message based on the above context.")
+
+def parse_llm_json(raw_response: str) -> dict:
+    """Safely extracts and parses JSON from an LLM response string."""
+    if not raw_response or not raw_response.strip():
+        return {}
+
+    # 1. Clean markdown code blocks if the LLM wrapped its JSON output
+    cleaned = re.sub(r"```(?:json)?\s*", "", raw_response, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("```", "").strip()
+
+    # 2. Extract JSON object substring if extra text precedes/follows it
+    json_match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if json_match:
+        cleaned = json_match.group(0)
+
+    # 3. Parse JSON safely
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        print(f"⚠️ JSON Parsing Error: {e}")
+        print(f"Raw Output was: {raw_response}")
+        return {}
