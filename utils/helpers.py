@@ -24,7 +24,37 @@ def run_command(command : list[str]) -> str:
     return result.stdout.strip()
 
 def get_context(user_input, stage, diff,):
-    return send_to_jarvis(f"Git status:\n{stage}\n\nGit diff:\n{diff}\n\nUser input:\n{user_input}\n\nPlease provide a commit message based on the above context.")
+    return send_to_jarvis(
+        f"Git status:\n{stage}\n\nGit diff:\n{diff}\n\nUser input:\n{user_input}\n\nPlease provide a commit message based on the above context.",
+        stream=False,
+    )
+
+
+def clean_commit_message(raw_response: str) -> str:
+    if not raw_response or not raw_response.strip():
+        return ""
+
+    cleaned = re.sub(r"```(?:text|md|markdown)?\s*", "", raw_response, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("```", "").strip()
+
+    lines = [line.rstrip() for line in cleaned.splitlines()]
+    non_empty_lines = [line for line in lines if line.strip()]
+
+    if not non_empty_lines:
+        return ""
+
+    subject = non_empty_lines[0].strip()
+    body_lines = non_empty_lines[1:]
+
+    if not body_lines:
+        return subject
+
+    body = " ".join(body_lines).strip()
+    body_words = body.split()
+    if len(body_words) > 100:
+        body = " ".join(body_words[:100]).rstrip() + "..."
+
+    return f"{subject}\n\n{body}" if body else subject
 
 def parse_llm_json(raw_response: str) -> dict:
     """Safely extracts and parses JSON from an LLM response string."""

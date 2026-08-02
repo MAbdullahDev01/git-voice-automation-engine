@@ -20,15 +20,22 @@ def generate_git_commit_message(context_input: str = "") -> str | None:
     # 3. Construct prompt
     prompt = f"""
     You are an expert Git assistant and senior software developer.
-    Analyze the context, staged files, and git diff below to generate a high-quality, descriptive commit message following the Conventional Commits format.
+    Analyze the context, staged files, and git diff below to generate a high-quality commit message following the Conventional Commits format.
 
     FORMAT SPECIFICATION:
     <type>(<scope>): <description>
 
+    OPTIONAL BODY FORMAT:
+
+    <type>(<scope>): <description>
+
+    <body>
+
     RULES FOR TYPE & DESCRIPTION:
     1. Valid types: feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert.
     2. Description must explain WHAT changed and WHY in imperative present tense. Keep it concise (under 60 characters).
-    3. Be specific based on actual diff content.
+    3. Include a short body description when helpful. The body must be under 100 words.
+    4. Be specific based on actual diff content.
 
     CONTEXT / INTENT:
     {context}
@@ -38,10 +45,11 @@ def generate_git_commit_message(context_input: str = "") -> str | None:
     STAGED FILES & DIFF:
     {truncated_diff}
 
-    Write ONLY the final commit message string without markdown backticks or commentary
+    Write ONLY the final commit message string without markdown backticks or commentary.
+    If you include a body, separate it from the subject with a single blank line.
     """
 
-    raw_response = send_to_jarvis(prompt)
+    raw_response = send_to_jarvis(prompt, stream=False)
     commit_message = clean_commit_message(raw_response)
 
     if not commit_message:
@@ -51,7 +59,16 @@ def generate_git_commit_message(context_input: str = "") -> str | None:
 
 
 def execute_git_commit(commit_message: str) -> str:
-    run_command(["git", "commit", "-m", commit_message])
+    subject, body = commit_message.strip(), ""
+
+    if "\n\n" in subject:
+        subject, body = subject.split("\n\n", 1)
+
+    command = ["git", "commit", "-m", subject]
+    if body.strip():
+        command.extend(["-m", body.strip()])
+
+    run_command(command)
     run_command(["git", "push"])
     return "Changes committed and pushed successfully."
 

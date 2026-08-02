@@ -1,5 +1,8 @@
 import argparse
+import queue
+import re
 import sys
+import threading
 
 try:
     from core.jarvis import send_to_jarvis
@@ -40,6 +43,66 @@ else:
 PENDING_COMMIT_MSG = None
 
 
+def stream_and_speak(token_generator, on_chunk=None) -> str:
+    """Streams text to stdout (and, if provided, to on_chunk) while speaking
+    sentence-by-sentence in a background thread. Does not block the caller's
+    ability to see text live — only the final return waits on speech cleanup."""
+    speech_queue = queue.Queue()
+
+    def speech_worker():
+        while True:
+            sentence = speech_queue.get()
+            if sentence is None:
+                speech_queue.task_done()
+                break
+            try:
+                speak_text(sentence)
+            except Exception as exc:
+                print(f"\nSpeech worker error: {exc}")
+            finally:
+                speech_queue.task_done()
+
+    worker_thread = threading.Thread(target=speech_worker, daemon=True)
+    worker_thread.start()
+
+    full_text = ""
+    buffer = ""
+    sentence_end_pattern = re.compile(r"([.!?])\s+")
+
+    print("Jarvis: ", end="", flush=True)
+
+    for chunk in token_generator:
+        sys.stdout.write(chunk)
+        sys.stdout.flush()
+
+        if on_chunk:
+            on_chunk(chunk)          # <-- live callback, fires as each token arrives
+
+        full_text += chunk
+        buffer += chunk
+
+        match = sentence_end_pattern.search(buffer)
+        while match:
+            split_pos = match.end()
+            sentence_to_speak = buffer[:split_pos].strip()
+            buffer = buffer[split_pos:]
+
+            if sentence_to_speak:
+                speech_queue.put(sentence_to_speak)
+
+            match = sentence_end_pattern.search(buffer)
+
+    if buffer.strip():
+        speech_queue.put(buffer.strip())
+
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+
+    speech_queue.put(None)
+    worker_thread.join()
+
+    return full_text
+
 def speak_text(text: str) -> None:
     try:
         from audio.test_piper import speak_neral
@@ -57,7 +120,7 @@ def listen_for_input() -> str:
         return ""
 
 
-def process_pipeline(user_input: str, interactive: bool = True):
+def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
     global PENDING_COMMIT_MSG
 
     try:
@@ -159,10 +222,16 @@ def process_pipeline(user_input: str, interactive: bool = True):
 
             case "general_chat":
                 print(f"Query enhanced into professional prompt:\n--> {query}")
-                response = send_to_jarvis(query) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
-                print(f"Jarvis: {response}")
-                speak_text(response)
-                response_text = response
+                stream_gen = send_to_jarvis(query or user_input) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
+
+                if isinstance(stream_gen, str):
+                    print(f"Jarvis: {stream_gen}")
+                    speak_text(stream_gen)
+                    if on_chunk:
+                        on_chunk(stream_gen)
+                    response_text = stream_gen
+                else:
+                    response_text = stream_and_speak(stream_gen, on_chunk=on_chunk)
 
             case "spotify_play":
                 if play_music is None:
@@ -194,10 +263,17 @@ def process_pipeline(user_input: str, interactive: bool = True):
 
             case _:
                 print("Unknown intent. Passing to fallback handler.")
-                response = send_to_jarvis(user_input) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
-                print(f"Jarvis: {response}")
-                speak_text(response)
-                response_text = response
+                stream_gen = send_to_jarvis(user_input) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
+
+                if isinstance(stream_gen, str):
+                    print(f"Jarvis: {stream_gen}")
+                    speak_text(stream_gen)
+                    if on_chunk:
+                        on_chunk(stream_gen)
+                    response_text = stream_gen
+                else:
+                    response_text = stream_and_speak(stream_gen, on_chunk=on_chunk)
+
     except KeyboardInterrupt:
             print("\nJarvis: Shutting down. Goodbye, sir!")
             speak_text("Shutting down. Goodbye, sir!")

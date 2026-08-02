@@ -287,6 +287,7 @@ class JarvisHUD(QWidget):
 class PipelineWorker(QThread):
     finished = pyqtSignal(str)
     failed = pyqtSignal(str)
+    chunk_received = pyqtSignal(str)   # NEW
 
     def __init__(self, user_input: str):
         super().__init__()
@@ -296,7 +297,11 @@ class PipelineWorker(QThread):
         try:
             from main import process_pipeline
 
-            result = process_pipeline(self.user_input, interactive=False)
+            result = process_pipeline(
+                self.user_input,
+                interactive=False,
+                on_chunk=self.chunk_received.emit,   # NEW
+            )
             if not isinstance(result, str) or not result.strip():
                 result = f"Acknowledged. You said: \u201c{self.user_input}\u201d"
             self.finished.emit(result)
@@ -311,6 +316,7 @@ class JarvisMainWindow(QMainWindow):
         super().__init__()
         self._drag_pos = None
         self._worker = None
+        self._streaming_started = False
         self._typing_timer = QTimer(self)
         self._typing_timer.timeout.connect(self._type_next_chunk)
         self._typing_buffer = ""
@@ -528,17 +534,36 @@ class JarvisMainWindow(QMainWindow):
         self.input_field.clear()
         self._set_state("processing", "analyzing request...")
 
+        self._streaming_started = False   # NEW: track whether we already streamed text live
+
         self._worker = PipelineWorker(text)
+        self._worker.chunk_received.connect(self._on_chunk_received)   # NEW
         self._worker.finished.connect(self._on_pipeline_finished)
         self._worker.failed.connect(self._on_pipeline_failed)
         self._worker.start()
 
-    def _on_pipeline_finished(self, result: str):
-        self._set_state("speaking", "response ready")
-        self._begin_jarvis_line()
-        self._start_typing_effect(result)
+    def _on_chunk_received(self, chunk: str):
+        if not self._streaming_started:
+            self._begin_jarvis_line()
+            self._set_state("speaking", "response streaming...")
+            self._streaming_started = True
 
-        # Trigger Y/N UI action buttons if confirmation is needed
+        cursor = self.log_output.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.insertText(chunk)
+        self.log_output.setTextCursor(cursor)
+        self.log_output.ensureCursorVisible()
+
+    def _on_pipeline_finished(self, result: str):
+        if self._streaming_started:
+            # Text already rendered live via _on_chunk_received; just wind down state.
+            QTimer.singleShot(400, lambda: self._set_state("idle", "core temperature nominal"))
+        else:
+            # Non-streamed responses (git tools, spotify, etc.) — keep the typewriter effect.
+            self._set_state("speaking", "response ready")
+            self._begin_jarvis_line()
+            self._start_typing_effect(result)
+
         if "(y/n)" in result.lower():
             QTimer.singleShot(
                 len(result) * 16 + 200,
@@ -554,6 +579,7 @@ class JarvisMainWindow(QMainWindow):
         self._typing_buffer = full_text
         self._typing_index = 0
         self._typing_timer.start(16)
+        self._streaming_started = False
 
     def _type_next_chunk(self):
         if self._typing_index >= len(self._typing_buffer):
