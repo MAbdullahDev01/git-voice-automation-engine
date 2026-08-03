@@ -40,9 +40,11 @@ You MUST reply strictly in valid JSON matching this schema:
 }
 """
 
-def route_command(user_input: str) -> dict:
+def route_command(user_input: str, context : str = "") -> dict:
    """Classifies user input and returns a dictionary with 'intent' and 'query'."""
    prompt = f"User Input: {user_input}"
+   if context:
+      prompt += f"\nContext: {context}"
    raw_response = call_groq(ROUTER_SYSTEM_PROMPT, prompt, json_mode=True, smart_model=False)
    payload = parse_llm_json(raw_response)
 

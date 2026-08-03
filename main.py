@@ -4,6 +4,8 @@ import re
 import sys
 import threading
 
+from core.memory import SimpleMemory
+
 try:
     from core.jarvis import send_to_jarvis
     from core.router import route_command
@@ -41,6 +43,7 @@ else:
 
 
 PENDING_COMMIT_MSG = None
+memory = SimpleMemory(max_turns=5)
 
 
 def stream_and_speak(token_generator, on_chunk=None) -> str:
@@ -123,8 +126,11 @@ def listen_for_input() -> str:
 def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
     global PENDING_COMMIT_MSG
 
+    context = memory.get_context_prompt()
+
     try:
         print(f"\n[User Input]: {user_input}")
+        memory.add_message(role="user", content=user_input)
 
         # Handle pending commit confirmation before routing new intent
         if PENDING_COMMIT_MSG is not None:
@@ -145,7 +151,7 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
             payload = {"intent": "general_chat", "query": user_input}
             print(f"Router unavailable ({ROUTER_IMPORT_ERROR}). Falling back to general chat.")
         else:
-            payload = route_command(user_input)
+            payload = route_command(user_input, context=context)
         
         intent = payload.get("intent")
         query = payload.get("query")
@@ -222,7 +228,9 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
 
             case "general_chat":
                 print(f"Query enhanced into professional prompt:\n--> {query}")
-                stream_gen = send_to_jarvis(query or user_input) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
+                prompt_text = query if query else user_input
+                full_prompt = f"{context}\n\nUser: {prompt_text}" if context else prompt_text
+                stream_gen = send_to_jarvis(full_prompt) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
 
                 if isinstance(stream_gen, str):
                     print(f"Jarvis: {stream_gen}")
@@ -263,7 +271,9 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
 
             case _:
                 print("Unknown intent. Passing to fallback handler.")
-                stream_gen = send_to_jarvis(user_input) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
+                prompt_text = query if query else user_input
+                full_prompt = f"{context}\n\nUser: {prompt_text}" if context else prompt_text
+                stream_gen = send_to_jarvis(full_prompt) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
 
                 if isinstance(stream_gen, str):
                     print(f"Jarvis: {stream_gen}")
@@ -274,10 +284,11 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
                 else:
                     response_text = stream_and_speak(stream_gen, on_chunk=on_chunk)
 
+        memory.add_message(role="assistant", content=response_text if response_text else f"Router Output: {payload}")
+
     except KeyboardInterrupt:
             print("\nJarvis: Shutting down. Goodbye, sir!")
             speak_text("Shutting down. Goodbye, sir!")
-
     return response_text
 
 
