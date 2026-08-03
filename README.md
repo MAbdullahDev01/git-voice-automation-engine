@@ -1,96 +1,80 @@
 # Git Voice Automation Engine
 
-This project is a voice-first local assistant that lets you interact with an Ollama-backed language model through either typed text or microphone input. The application listens for your voice, sends the prompt to the model, and speaks the reply back using a Piper text-to-speech voice model.
+Git Voice Automation Engine is a voice-first assistant and automation demo built in Python. It combines typed input, push-to-talk speech input, text-to-speech output, Groq-powered chat, Git automation helpers, and Spotify playback controls in a single local app.
 
-Over time, the project has grown into a small personal automation prototype with:
+## What It Does
 
-- speech recognition for voice input
-- text-to-speech output with adjustable speed and volume
-- an Ollama-powered assistant loop
-- Git automation helpers that can generate and run commit messages
+When you run the app, it can:
 
-It is designed as a simple demo/experiment for combining:
+1. Accept typed text in the terminal.
+2. Accept voice input by pressing Enter in CLI mode and holding `M` while speaking.
+3. Route your request into one of several intents, including general chat, Git branch actions, Git commits, and Spotify playback commands.
+4. Speak the response back through the included Piper voice model.
 
-- speech recognition
-- a local or remote LLM via Ollama
-- text-to-speech output
-- Git workflow automation
-- a small command loop in Python
+The project currently supports both a terminal CLI and a PyQt6 window UI.
 
-## What this project does
-
-When you run the app:
-
-1. You can type a message and press Enter.
-2. Or you can press and hold M to speak into your microphone.
-3. The app sends your input to Ollama.
-4. The model generates a reply.
-5. The reply is printed in the console and spoken aloud.
-
-Typing `quit` exits the program.
-
-## Repository structure
+## Repository Structure
 
 ```text
 .
-├── main.py                 # Main entry point and interactive loop
-├── config.py               # Loads environment variables from .env
-├── .env                    # Local environment settings (not committed)
-├── .python-version         # Python version used by the project
-├── LICENSE                 # Project license
-├── README.md               # Project overview and usage guide
+├── app.py
+├── config.py
+├── main.py
+├── requirements.txt
+├── audio/
+│   ├── __init__.py
+│   ├── test_ears.py
+│   └── test_piper.py
+├── core/
+│   ├── __init__.py
+│   ├── jarvis.py
+│   ├── router.py
+│   └── schemas.py
+├── tools/
+│   ├── __init__.py
+│   ├── git_tools.py
+│   └── spotify_tools.py
 ├── utils/
-│   ├── jarvis.py           # Sends prompts to Ollama
-│   ├── test_ears.py        # Microphone capture and speech-to-text
-│   └── test_piper.py       # Text-to-speech playback with Piper
-│   └── git_utils.py        # Git automation helpers for commit generation
-├── voice_models/
-│   └── en_GB-alan-medium.onnx
-│       └── en_GB-alan-medium.onnx.json
-└── venv/                   # Local virtual environment
+│   ├── groq.py
+│   └── helpers.py
+└── voice_models/
+    ├── en_GB-alan-medium.onnx
+    └── en_GB-alan-medium.onnx.json
 ```
 
-## Main files
+## Main Components
 
-- `main.py`
-  - Starts the interactive loop.
-  - Accepts typed input or voice input.
-  - Prints and speaks the assistant response.
-
-- `config.py`
-  - Loads environment variables from `.env`.
-  - Includes voice and model settings.
-
-- `utils/jarvis.py`
-  - Sends the prompt to the configured Ollama API endpoint.
-
-- `utils/test_ears.py`
-  - Captures microphone audio and transcribes it using Google Speech Recognition.
-
-- `utils/test_piper.py`
-  - Synthesizes speech using the included Piper voice model.
-  - Uses the configured speed and volume settings.
-
-- `utils/git_utils.py`
-  - Adds Git automation features such as generating a commit message from the staged diff and optionally committing/pushing changes.
+- `main.py` starts the app, handles CLI mode, and routes text or voice input through the assistant pipeline.
+- `app.py` provides the PyQt6 window interface.
+- `core/router.py` classifies user input into intents such as chat, Git, or Spotify actions.
+- `core/jarvis.py` sends general chat prompts to Groq.
+- `tools/git_tools.py` handles branch creation, switching, deletion, listing, and commit generation.
+- `tools/spotify_tools.py` connects to Spotify playback controls through Spotipy.
+- `audio/test_ears.py` captures microphone input and uses Google speech recognition.
+- `audio/test_piper.py` speaks responses using the local Piper voice model.
 
 ## Requirements
 
-This project depends on Python packages such as:
+You will need:
 
-- `requests`
+- Python 3.12 or newer
+- a working microphone and speakers or headphones
+- a Groq API key
+- optional Spotify developer credentials if you want Spotify commands
+- the included Piper voice model files in `voice_models/`
+
+The project uses packages such as:
+
+- `groq`
+- `pydantic`
 - `python-dotenv`
-- `speechrecognition`
+- `SpeechRecognition`
 - `keyboard`
 - `numpy`
 - `sounddevice`
-- `piper` (or the relevant Piper runtime dependency used by your environment)
-
-You will also need:
-
-- a working microphone and speakers/headphones
-- an Ollama instance running locally or a reachable Ollama endpoint
-- a model installed in Ollama, such as `llama3.2` or another supported model
+- `piper-tts`
+- `PyQt6`
+- `spotipy`
 
 ## Setup
 
@@ -101,69 +85,99 @@ py -3.12 -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-2. Install the required dependencies:
+2. Install dependencies:
 
 ```powershell
-pip install requests python-dotenv SpeechRecognition keyboard numpy sounddevice
+pip install -r requirements.txt
 ```
 
-If your environment needs the Piper package separately, install it according to your local setup.
-
-3. Create a `.env` file in the project root with your Ollama settings:
+3. Create a `.env` file in the project root. A good starting point is:
 
 ```env
-OLLAMA_URL=http://localhost:11434/api/chat
-MODEL_NAME=llama3.2
+GROQ_API_KEY=your_groq_api_key
+GROQ_FAST_MODEL=llama-3.1-8b-instant
+GROQ_SMART_MODEL=llama-3.3-70b-versatile
 VOICE_MODEL_PATH=./voice_models/en_GB-alan-medium.onnx
 SPEECH_SPEED=0.80
 SPEECH_VOLUME=1.0
+SPOTIPY_CLIENT_ID=your_spotify_client_id
+SPOTIPY_CLIENT_SECRET=your_spotify_client_secret
+SPOTIPY_REDIRECT_URI=http://localhost:8080/callback
 ```
 
-If you use a different Ollama host or port, update the URL accordingly. The speech settings can be tuned to make the assistant speak faster or slower.
+If you are not using Spotify, you can leave the Spotify settings unset.
 
-4. Make sure Ollama is running and that your chosen model is available.
+## How To Use It
 
-## How to run
+### Terminal CLI
 
-From the project root:
+Run the CLI mode with:
 
 ```powershell
-python main.py
+python main.py --cli
 ```
 
-Once it starts, you can:
+Then:
 
-- type a prompt and press Enter
-- or press and hold `M` to speak
+- type a prompt and press Enter to send it as text
+- press Enter on an empty line to start push-to-talk voice input
+- hold `M` while speaking, then release `M` to finish recording
+- type `quit`, `exit`, or `bye` to close the app
 
-To exit the app, type:
+Examples:
 
-```text
-quit
+- `What does this repo do?`
+- `create a git branch called feature/voice-ui`
+- `commit the staged changes`
+- `play reflections by the neighbourhood`
+- `pause music`
+
+### Window UI
+
+Run the window UI with:
+
+```powershell
+python main.py --window
 ```
 
-## Notes and limitations
+If `PyQt6` is installed, the window UI is the default when you run `python main.py` without arguments. The window uses the same assistant pipeline as the CLI.
+
+### Git Commands
+
+Git-related prompts are routed automatically. The app can:
+
+- create a new branch
+- switch branches
+- delete a branch
+- list local branches
+- show the current branch
+- generate a commit message from the staged diff
+- commit and push after confirmation
+
+For commit flow, the app stages changes, generates a conventional commit message, and then asks for confirmation before committing and pushing.
+
+### Spotify Commands
+
+Spotify playback works through your authenticated Spotify account and an active device. Supported prompts include:
+
+- play a track or resume playback
+- pause playback
+- skip to the next track
+- return to the previous track
+
+## Notes
 
 - Voice input uses Google speech recognition, so network access may be required.
-- The text-to-speech experience depends on the local audio environment and the Piper model files in the `voice_models` directory.
-- The Git helper workflow is a convenience feature and should be used carefully, especially when pushing changes automatically.
-- The project is intentionally lightweight and is meant as a practical example rather than a production-grade voice assistant framework.
+- The Piper voice model must exist at the path defined in `VOICE_MODEL_PATH`.
+- The Git automation helpers can commit and push changes, so use them carefully.
+- Spotify commands require valid Spotify API credentials and an active playback device.
 
-## Recent progress
-
-The project now includes:
-
-- configurable speech speed and volume settings
-- a working voice-driven assistant loop
-- a Git helper module that can generate commit messages from staged changes
-- a cleaner project structure with dedicated utility code
-
-## Future ideas
+## Future Ideas
 
 Possible next improvements include:
 
-- adding better command handling and conversation memory
-- supporting more local speech-to-text options
-- improving safety checks around automatic Git commits and pushes
-- expanding the assistant into a broader automation workflow
-- adding commands to play name specific songs on spotify desktop
+- expanding the command router with more intents
+- adding safer commit confirmation flows
+- improving offline speech-to-text options
+- adding richer memory and follow-up handling
+- expanding Spotify support with more playback commands
