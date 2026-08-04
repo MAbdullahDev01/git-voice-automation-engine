@@ -17,7 +17,7 @@ else:
     ROUTER_IMPORT_ERROR = None
 
 try:
-    from tools.spotify_tools import play_music, pause_music, skip_track, previous_track
+    from tools.spotify_tools import play_music, pause_music, skip_track, previous_track, get_current_playing_info
 except Exception as exc:  # pragma: no cover - runtime fallback
     play_music = pause_music = skip_track = previous_track = None
     SPOTIFY_IMPORT_ERROR = exc
@@ -245,8 +245,9 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
                 if play_music is None:
                     response_text = "Spotify integration is unavailable in this environment."
                 else:
-                    play_music(query if query else "")
-                    response_text = f"Playing music{f': {query}' if query else ''}."
+                    response_text = play_music(query if query else "")
+                    if not response_text:
+                        response_text = f"Playing music{f': {query}' if query else ''}."
 
             case "spotify_pause":
                 if pause_music is None:
@@ -268,6 +269,9 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
                 else:
                     previous_track()
                     response_text = "Went back to the previous track."
+
+            case "spotify_info":
+                response_text = get_current_playing_info()
 
             case _:
                 print("Unknown intent. Passing to fallback handler.")

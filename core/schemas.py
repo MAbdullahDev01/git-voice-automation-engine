@@ -11,6 +11,8 @@ IntentType = Literal[
     "spotify_play",
     "spotify_pause",
     "spotify_skip",
+    "spotify_previous",
+    "spotify_info",
     "general_chat"
 ]
 
