@@ -1,29 +1,47 @@
-import argparse
-import queue
+# =================================
+# Built-in libraries
+# =================================
+
 import re
 import sys
+import argparse
+import queue
 import threading
 
-from core.memory import SimpleMemory
+# =================================
+# Local imports
+# =================================
 
+# Core features import
 try:
     from core.jarvis import send_to_jarvis
     from core.router import route_command
-except Exception as exc:  # pragma: no cover - runtime fallback
+except Exception as e:  # pragma: no cover - runtime fallback
     send_to_jarvis = None
     route_command = None
-    ROUTER_IMPORT_ERROR = exc
+    ROUTER_IMPORT_ERROR = e
 else:
     ROUTER_IMPORT_ERROR = None
 
+# Memory import
+try:
+    from core.memory import SimpleMemory
+except Exception as e:  # pragma: no cover - runtime fallback
+    SimpleMemory = None
+else:
+    MEMORY_IMPORT_ERROR = None
+
+
+# Spotify tools import
 try:
     from tools.spotify_tools import play_music, pause_music, skip_track, previous_track, get_current_playing_info
-except Exception as exc:  # pragma: no cover - runtime fallback
+except Exception as e:  # pragma: no cover - runtime fallback
     play_music = pause_music = skip_track = previous_track = None
-    SPOTIFY_IMPORT_ERROR = exc
+    SPOTIFY_IMPORT_ERROR = e
 else:
     SPOTIFY_IMPORT_ERROR = None
 
+# Github tools import
 try:
     from tools.git_tools import (
         cancel_git_commit,
@@ -41,10 +59,16 @@ except Exception as exc:  # pragma: no cover - runtime fallback
 else:
     GIT_IMPORT_ERROR = None
 
-
+# Global Variable
 PENDING_COMMIT_MSG = None
-memory = SimpleMemory(max_turns=5)
 
+# Initialising memory
+if SimpleMemory is not None:
+    memory = SimpleMemory(max_turns=5)
+
+# =================================
+# Streaming and speaking
+# =================================
 
 def stream_and_speak(token_generator, on_chunk=None) -> str:
     """Streams text to stdout (and, if provided, to on_chunk) while speaking
@@ -106,6 +130,10 @@ def stream_and_speak(token_generator, on_chunk=None) -> str:
 
     return full_text
 
+# =================================
+# Speak function
+# =================================
+
 def speak_text(text: str) -> None:
     try:
         from audio.test_piper import speak_neral
@@ -113,6 +141,9 @@ def speak_text(text: str) -> None:
     except Exception as exc:
         print(f"Speech output unavailable: {exc}")
 
+# =================================
+# Listening function
+# =================================
 
 def listen_for_input() -> str:
     try:
@@ -122,6 +153,35 @@ def listen_for_input() -> str:
         print(f"Speech input unavailable: {exc}")
         return ""
 
+# =================================
+# CLI
+# =================================
+
+def run_cli():
+    try:
+        while True:
+            user_input = input("\nYou (type text or press Enter to talk): ").strip()
+            
+            # Handle exit conditions upfront
+            if user_input.lower() in ["quit", "exit", "bye"]:
+                raise KeyboardInterrupt
+            
+            # Trigger STT listening if input is empty (User pressed Enter)
+            elif user_input == "":
+                user_input = listen_for_input().strip()
+                if not user_input:
+                    continue
+                print(f"You (Spoke): {user_input}")
+
+            # Route the user input through the new AI classification pipeline
+            process_pipeline(user_input)
+    except KeyboardInterrupt:
+        print("\nJarvis: Shutting down. Goodbye, sir!")
+        speak_text("Shutting down. Goodbye, sir!")
+
+# =================================
+# Main Pipeline
+# =================================
 
 def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
     global PENDING_COMMIT_MSG
@@ -144,6 +204,7 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
             return cancel_git_commit()
 
         if user_input in ["quit", "exit", "bye"]:
+            # TODO: Add exit for window too
             raise KeyboardInterrupt
 
         # 1. Send to Router Model
@@ -152,7 +213,8 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
             print(f"Router unavailable ({ROUTER_IMPORT_ERROR}). Falling back to general chat.")
         else:
             payload = route_command(user_input, context=context)
-        
+
+        # Split payload into intent and query for easier handling
         intent = payload.get("intent")
         query = payload.get("query")
         
@@ -162,6 +224,11 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
         
         # 2. Match/Case Switch Routing
         match intent:
+
+            # =================================
+            # Git tools
+            # =================================
+
             case "git_commit":
                 print("Triggering Git Commit Tooling...")
                 if generate_git_commit_message is None:
@@ -226,20 +293,10 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
                     current_branch = git_current_branch()
                     response_text = f"Current branch: {current_branch}"
 
-            case "general_chat":
-                print(f"Query enhanced into professional prompt:\n--> {query}")
-                prompt_text = query if query else user_input
-                full_prompt = f"{context}\n\nUser: {prompt_text}" if context else prompt_text
-                stream_gen = send_to_jarvis(full_prompt) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
+            # =================================
+            # Spotify tools
+            # =================================
 
-                if isinstance(stream_gen, str):
-                    print(f"Jarvis: {stream_gen}")
-                    speak_text(stream_gen)
-                    if on_chunk:
-                        on_chunk(stream_gen)
-                    response_text = stream_gen
-                else:
-                    response_text = stream_and_speak(stream_gen, on_chunk=on_chunk)
 
             case "spotify_play":
                 if play_music is None:
@@ -273,6 +330,29 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
             case "spotify_info":
                 response_text = get_current_playing_info()
 
+            # =================================
+            # General chat
+            # =================================
+
+            case "general_chat":
+                print(f"Query enhanced into professional prompt:\n--> {query}")
+                prompt_text = query if query else user_input
+                full_prompt = f"User: {prompt_text}\n\nContext: {context}" if context else prompt_text
+                stream_gen = send_to_jarvis(full_prompt) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
+
+                if isinstance(stream_gen, str):
+                    print(f"Jarvis: {stream_gen}")
+                    speak_text(stream_gen)
+                    if on_chunk:
+                        on_chunk(stream_gen)
+                    response_text = stream_gen
+                else:
+                    response_text = stream_and_speak(stream_gen, on_chunk=on_chunk)
+
+            # =================================
+            # Fallback
+            # =================================
+
             case _:
                 print("Unknown intent. Passing to fallback handler.")
                 prompt_text = query if query else user_input
@@ -288,6 +368,7 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
                 else:
                     response_text = stream_and_speak(stream_gen, on_chunk=on_chunk)
 
+        # Add JARVIS response to memory
         memory.add_message(role="assistant", content=response_text if response_text else f"Router Output: {payload}")
 
     except KeyboardInterrupt:
@@ -295,8 +376,12 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
             speak_text("Shutting down. Goodbye, sir!")
     return response_text
 
+# =================================
+# Main function
+# =================================
 
 def main(argv=None):
+    # Parse which mode to use
     parser = argparse.ArgumentParser(description="Run JARVIS in CLI or window mode")
     parser.add_argument("--cli", action="store_true", help="Run the terminal-based CLI instead of the window UI")
     parser.add_argument("--window", action="store_true", help="Run the window UI (default)")
@@ -321,33 +406,6 @@ def main(argv=None):
     window = JarvisMainWindow()
     window.show()
     sys.exit(app.exec())
-
-
-def run_cli():
-    user_input: str
-    
-    try:
-        while True:
-            user_input = input("\nYou (type text or press Enter to talk): ").strip()
-            
-            # Handle exit conditions upfront
-            if user_input.lower() in ["quit", "exit", "bye"]:
-                raise KeyboardInterrupt
-            
-            # Trigger STT listening if input is empty (User pressed Enter)
-            elif user_input == "":
-                user_input = listen_for_input().strip()
-                if not user_input:
-                    continue
-                print(f"You (Spoke): {user_input}")
-
-            # Route the user input through the new AI classification pipeline
-            process_pipeline(user_input)
-
-    except KeyboardInterrupt:
-        print("\nJarvis: Shutting down. Goodbye, sir!")
-        speak_text("Shutting down. Goodbye, sir!")
-
 
 if __name__ == "__main__":
     main()

@@ -1,3 +1,5 @@
+# TODO: Consider adding a more advanced memory system that can summarize or prioritize important information over time, rather than just keeping the last N turns. This could involve natural language processing techniques to identify key points in the conversation.
+
 class SimpleMemory:
     def __init__(self, max_turns: int = 5):
         """
