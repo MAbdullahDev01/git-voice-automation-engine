@@ -53,6 +53,30 @@ Reply strictly in valid JSON:
     "intent": "<intent_name>",
     "query": "<extracted_target_or_expanded_prompt>"
 }
+
+DISAMBIGUATION EXAMPLES (question/opinion vs command):
+
+Input: "should I create a branch for this feature?"
+-> {"intent": "general_chat", "query": "Advice on whether to create a branch for this feature", "confidence": 0.9}
+
+Input: "create a branch called feature/login"
+-> {"intent": "git_create_branch", "query": "feature/login", "confidence": 0.97}
+
+Input: "what happens if I delete the main branch?"
+-> {"intent": "general_chat", "query": "Explain the consequences of deleting the main branch", "confidence": 0.9}
+
+Input: "delete the branch called old-login"
+-> {"intent": "git_delete_branch", "query": "old-login", "confidence": 0.96}
+
+Input: "this song is so good"
+-> {"intent": "general_chat", "query": "User is expressing enjoyment of the currently playing song", "confidence": 0.9}
+
+Input: "play something like this"
+-> {"intent": "spotify_play", "query": "something like this", "confidence": 0.7}
+
+RULE: If the input is a question, opinion, or statement ABOUT an action rather than
+a direct instruction to perform it, classify as general_chat. If uncertain, lower confidence
+and prefer general_chat.
 """
 
 CONFIDENCE_THRESHOLD = 0.6
