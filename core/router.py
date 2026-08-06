@@ -55,22 +55,32 @@ Reply strictly in valid JSON:
 }
 """
 
+CONFIDENCE_THRESHOLD = 0.6
+
 def route_command(user_input: str, context : str = "") -> dict:
-   """Classifies user input and returns a dictionary with 'intent' and 'query'."""
+   """Classifies user input and returns a dictionary with 'intent', 'query', and 'confidence'."""
    prompt = f"User Input: {user_input}"
    if context:
       prompt += f"\nContext: {context}"
-   raw_response = call_groq(ROUTER_SYSTEM_PROMPT, prompt, json_mode=True, smart_model=False)
-   payload = parse_llm_json(raw_response)
+   raw_response = call_groq(ROUTER_SYSTEM_PROMPT, prompt, json_mode=True, smart_model=True)
+   if raw_response is str:
+      payload = parse_llm_json(raw_response)
+   else:
+      print(f"Router Error: Unexpected response type from Groq: {type(raw_response)}. Falling back to general chat.")
 
    try:
       # Validate dictionary against Pydantic schema
       validated_payload = CommandPayload.model_validate(payload)
-      return validated_payload.model_dump()
-      
+
    except Exception as e:
       print(f"Router Parsing Error: {e}. Falling back to general chat.")
       return {
-         "intent": "general_chat", 
-         "query": user_input
+         "intent": "general_chat",
+         "query": user_input,
+         "confidence": 0.0
       }
+   if validated_payload.confidence < CONFIDENCE_THRESHOLD and validated_payload.intent != "general_chat":
+      print(f"Low confidence ({validated_payload.confidence}) for intent '{validated_payload.intent}'. Falling back.")
+      return {"intent": "general_chat", "query": user_input, "confidence": validated_payload.confidence}
+
+   return validated_payload.model_dump()

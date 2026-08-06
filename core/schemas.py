@@ -19,3 +19,4 @@ IntentType = Literal[
 class CommandPayload(BaseModel):
     intent: IntentType = Field(..., description="The intent of the command")
     query: str = Field(..., description="The command to be executed")
+    confidence : float = Field(..., ge=0.0, le=1.0, description="Confidence score of the intent classification (0.0 to 1.0)")
