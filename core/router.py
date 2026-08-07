@@ -1,6 +1,5 @@
 from core.schemas import CommandPayload
-from utils.groq import call_groq
-from utils.helpers import parse_llm_json
+from utils.groq import call_groq_structured
 
 ROUTER_SYSTEM_PROMPT = """
 You are the central Command Router for JARVIS, an AI co-pilot.
@@ -79,32 +78,32 @@ a direct instruction to perform it, classify as general_chat. If uncertain, lowe
 and prefer general_chat.
 """
 
+COMMAND_SCHEMA = {
+   "type": "object",
+   "properties": {
+      "intent": {"type": "string", "enum": [
+            "git_commit", "git_create_branch", "git_switch_branch",
+            "git_delete_branch", "git_list_branches", "git_current_branch",
+            "spotify_play", "spotify_pause", "spotify_skip",
+            "spotify_previous", "spotify_info", "general_chat",
+      ]},
+      "query": {"type": "string"},
+      "confidence": {"type": "number"},
+   },
+   "required": ["intent", "query", "confidence"],
+   "additionalProperties": False,
+}
+
 CONFIDENCE_THRESHOLD = 0.6
 
-def route_command(user_input: str, context : str = "") -> dict:
-   """Classifies user input and returns a dictionary with 'intent', 'query', and 'confidence'."""
-   prompt = f"User Input: {user_input}"
-   if context:
-      prompt += f"\nContext: {context}"
-   raw_response = call_groq(ROUTER_SYSTEM_PROMPT, prompt, json_mode=True, smart_model=True)
-   if raw_response is str:
-      payload = parse_llm_json(raw_response)
-   else:
-      print(f"Router Error: Unexpected response type from Groq: {type(raw_response)}. Falling back to general chat.")
-
+def route_command(user_input: str, context: str = "") -> dict:
+   prompt = f"User Input: {user_input}" + (f"\nContext: {context}" if context else "")
    try:
-      # Validate dictionary against Pydantic schema
-      validated_payload = CommandPayload.model_validate(payload)
-
+      payload = call_groq_structured(ROUTER_SYSTEM_PROMPT, prompt, COMMAND_SCHEMA, smart_model=True)
+      validated = CommandPayload.model_validate(payload)
+      if validated.confidence < CONFIDENCE_THRESHOLD and validated.intent != "general_chat":
+         return {"intent": "general_chat", "query": user_input, "confidence": validated.confidence}
+      return validated.model_dump()
    except Exception as e:
-      print(f"Router Parsing Error: {e}. Falling back to general chat.")
-      return {
-         "intent": "general_chat",
-         "query": user_input,
-         "confidence": 0.0
-      }
-   if validated_payload.confidence < CONFIDENCE_THRESHOLD and validated_payload.intent != "general_chat":
-      print(f"Low confidence ({validated_payload.confidence}) for intent '{validated_payload.intent}'. Falling back.")
-      return {"intent": "general_chat", "query": user_input, "confidence": validated_payload.confidence}
-
-   return validated_payload.model_dump()
+      print(f"Router error: {e}. Falling back to general chat.")
+      return {"intent": "general_chat", "query": user_input, "confidence": 0.0}
