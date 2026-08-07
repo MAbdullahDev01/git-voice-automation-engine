@@ -1,10 +1,13 @@
+# Imports
 from typing import Generator, Union
 from groq import Groq
 from config import GROQ_API_KEY, GROQ_FAST_MODEL, GROQ_SMART_MODEL, GROQ_FAST_STRUCTURED_MODEL, GROQ_SMART_STRUCTURED_MODEL
 import json
 
+# Create client instance for Groq API
 client = Groq(api_key=GROQ_API_KEY)
 
+# Call Groq function
 def call_groq(
     system_prompt: str, 
     user_input: str, 
@@ -46,7 +49,7 @@ def call_groq(
         print(f"Groq API Error: {e}")
         return "" if not should_stream else (chunk for chunk in [])
 
-
+# Call structured Groq function
 def call_groq_structured(system_prompt: str, user_input: str, schema: dict, smart_model: bool = True) -> dict:
     selected_model = GROQ_SMART_STRUCTURED_MODEL if smart_model else GROQ_FAST_STRUCTURED_MODEL
     if selected_model is None:

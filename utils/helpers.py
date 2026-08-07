@@ -1,8 +1,10 @@
+# Imports
 import re
 from subprocess import run, CalledProcessError
 
 from core.jarvis import send_to_jarvis
 
+# run command in terminal and return the output
 def run_command(command : list[str]) -> str:
 
     try:
@@ -22,12 +24,14 @@ def run_command(command : list[str]) -> str:
         
     return result.stdout.strip()
 
+# Generate context for commit message
 def get_context(user_input, stage, diff,):
     return send_to_jarvis(
         f"Git status:\n{stage}\n\nGit diff:\n{diff}\n\nUser input:\n{user_input}\n\nPlease provide a commit message based on the above context.",
         stream=False,
     )
 
+# Check if text looks ambiguous
 def looks_ambiguous(text: str) -> bool:
     pronoun_pattern = re.compile(r"\b(it|that|this|him|her|them|again)\b", re.I)
     return bool(pronoun_pattern.search(text))
