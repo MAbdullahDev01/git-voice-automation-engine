@@ -1,7 +1,17 @@
+# =================================
+# Built-in Libraries
+# =================================
 import re
 
+# =================================
+# Local imports
+# =================================
 from core.schemas import CommandPayload
 from utils.groq import call_groq_structured
+
+# =================================
+# Router System Prompt
+# =================================
 
 ROUTER_SYSTEM_PROMPT = """
 You are the central Command Router for JARVIS, an AI co-pilot.
@@ -80,6 +90,11 @@ a direct instruction to perform it, classify as general_chat. If uncertain, lowe
 and prefer general_chat.
 """
 
+# =================================
+# Global Constants
+# =================================
+
+# Deterministic rules for quick routing of common commands without needing LLM inference
 DETERMINISTIC_RULES = [
    (re.compile(r"^\s*(pause|stop)\s*(music|song|playback)?\s*$", re.I), "spotify_pause"),
    (re.compile(r"^\s*(skip|next)\s*(track|song)?\s*$", re.I), "spotify_skip"),
@@ -88,12 +103,7 @@ DETERMINISTIC_RULES = [
    (re.compile(r"^\s*list\s*(branches|my branches)?\s*$", re.I), "git_list_branches"),
 ]
 
-def try_deterministic_route(user_input: str) -> dict | None:
-   for pattern, intent in DETERMINISTIC_RULES:
-      if pattern.match(user_input.strip()):
-         return {"intent": intent, "query": "", "confidence": 1.0}
-   return None
-
+# Command schema for validating the output of the LLM router
 COMMAND_SCHEMA = {
    "type": "object",
    "properties": {
@@ -110,7 +120,18 @@ COMMAND_SCHEMA = {
    "additionalProperties": False,
 }
 
+# Confidence threshold for determining whether to route to general_chat or a specific intent
 CONFIDENCE_THRESHOLD = 0.6
+
+# =================================
+# Routing Functions
+# =================================
+
+def try_deterministic_route(user_input: str) -> dict | None:
+   for pattern, intent in DETERMINISTIC_RULES:
+      if pattern.match(user_input.strip()):
+         return {"intent": intent, "query": "", "confidence": 1.0}
+   return None
 
 def route_command(user_input: str, context: str = "") -> dict:
    quick = try_deterministic_route(user_input)
