@@ -1,3 +1,5 @@
+import re
+
 from core.schemas import CommandPayload
 from utils.groq import call_groq_structured
 
@@ -78,6 +80,20 @@ a direct instruction to perform it, classify as general_chat. If uncertain, lowe
 and prefer general_chat.
 """
 
+DETERMINISTIC_RULES = [
+   (re.compile(r"^\s*(pause|stop)\s*(music|song|playback)?\s*$", re.I), "spotify_pause"),
+   (re.compile(r"^\s*(skip|next)\s*(track|song)?\s*$", re.I), "spotify_skip"),
+   (re.compile(r"^\s*(previous|last|back)\s*(track|song)?\s*$", re.I), "spotify_previous"),
+   (re.compile(r"^\s*(current|what'?s? my)\s*branch\s*$", re.I), "git_current_branch"),
+   (re.compile(r"^\s*list\s*(branches|my branches)?\s*$", re.I), "git_list_branches"),
+]
+
+def try_deterministic_route(user_input: str) -> dict | None:
+   for pattern, intent in DETERMINISTIC_RULES:
+      if pattern.match(user_input.strip()):
+         return {"intent": intent, "query": "", "confidence": 1.0}
+   return None
+
 COMMAND_SCHEMA = {
    "type": "object",
    "properties": {
@@ -97,6 +113,10 @@ COMMAND_SCHEMA = {
 CONFIDENCE_THRESHOLD = 0.6
 
 def route_command(user_input: str, context: str = "") -> dict:
+   quick = try_deterministic_route(user_input)
+   if quick:
+      return quick
+   
    prompt = f"User Input: {user_input}" + (f"\nContext: {context}" if context else "")
    try:
       payload = call_groq_structured(ROUTER_SYSTEM_PROMPT, prompt, COMMAND_SCHEMA, smart_model=True)
