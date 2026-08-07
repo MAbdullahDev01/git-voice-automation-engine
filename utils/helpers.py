@@ -29,7 +29,6 @@ def get_context(user_input, stage, diff,):
         stream=False,
     )
 
-
 def clean_commit_message(raw_response: str) -> str:
     if not raw_response or not raw_response.strip():
         return ""
@@ -74,6 +73,10 @@ def parse_llm_json(raw_response: str) -> dict:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
-        print(f"⚠️ JSON Parsing Error: {e}")
+        print(f"JSON Parsing Error: {e}")
         print(f"Raw Output was: {raw_response}")
         return {}
+
+def looks_ambiguous(text: str) -> bool:
+    pronoun_pattern = re.compile(r"\b(it|that|this|him|her|them|again)\b", re.I)
+    return bool(pronoun_pattern.search(text))

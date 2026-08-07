@@ -31,7 +31,6 @@ except Exception as e:  # pragma: no cover - runtime fallback
 else:
     MEMORY_IMPORT_ERROR = None
 
-
 # Spotify tools import
 try:
     from tools.spotify_tools import play_music, pause_music, skip_track, previous_track, get_current_playing_info
@@ -58,6 +57,9 @@ except Exception as exc:  # pragma: no cover - runtime fallback
     GIT_IMPORT_ERROR = exc
 else:
     GIT_IMPORT_ERROR = None
+
+# Helper Function
+from utils.helpers import looks_ambiguous
 
 # Global Variable
 PENDING_COMMIT_MSG = None
@@ -187,6 +189,7 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
     global PENDING_COMMIT_MSG
 
     context = memory.get_context_prompt()
+    context_for_router = memory.get_context_prompt() if looks_ambiguous(user_input) else ""
 
     try:
         print(f"\n[User Input]: {user_input}")
@@ -212,7 +215,7 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
             payload = {"intent": "general_chat", "query": user_input}
             print(f"Router unavailable ({ROUTER_IMPORT_ERROR}). Falling back to general chat.")
         else:
-            payload = route_command(user_input, context=context)
+            payload = route_command(user_input, context=context_for_router)
 
         # Split payload into intent and query for easier handling
         intent = payload.get("intent")
