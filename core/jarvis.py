@@ -1,5 +1,7 @@
+# Imports
 from utils.groq import call_groq
 
+# System Prompt
 SYSTEM_PROMPT = """
 You are JARVIS, a highly intelligent, responsive, and natural desktop AI assistant.
 
@@ -10,6 +12,7 @@ Core Directives:
 4. Voice Persona: Direct, witty, helpful, and efficient. No fluff, greetings, or filler intros like "Sure, I can help with that!".
 """
 
+# Function to send user message to JARVIS
 def send_to_jarvis(user_message: str, stream: bool = True):
     return call_groq(
         system_prompt=SYSTEM_PROMPT,
