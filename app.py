@@ -287,6 +287,7 @@ class JarvisHUD(QWidget):
 class PipelineWorker(QThread):
     finished = pyqtSignal(str)
     failed = pyqtSignal(str)
+    shutdown_requested = pyqtSignal()
     chunk_received = pyqtSignal(str)   # NEW
 
     def __init__(self, user_input: str):
@@ -295,13 +296,16 @@ class PipelineWorker(QThread):
 
     def run(self):
         try:
-            from main import process_pipeline
+            from main import EXIT_SIGNAL, process_pipeline
 
             result = process_pipeline(
                 self.user_input,
                 interactive=False,
                 on_chunk=self.chunk_received.emit,   # NEW
             )
+            if result is EXIT_SIGNAL:
+                self.shutdown_requested.emit()
+                return
             if not isinstance(result, str) or not result.strip():
                 result = f"Acknowledged. You said: \u201c{self.user_input}\u201d"
             self.finished.emit(result)
@@ -538,6 +542,7 @@ class JarvisMainWindow(QMainWindow):
 
         self._worker = PipelineWorker(text)
         self._worker.chunk_received.connect(self._on_chunk_received)   # NEW
+        self._worker.shutdown_requested.connect(self._on_shutdown_requested)
         self._worker.finished.connect(self._on_pipeline_finished)
         self._worker.failed.connect(self._on_pipeline_failed)
         self._worker.start()
@@ -574,6 +579,11 @@ class JarvisMainWindow(QMainWindow):
         self._set_state("error", "an error occurred")
         self._append_system_line(f"Error: {error}")
         QTimer.singleShot(2000, lambda: self._set_state("idle", "core temperature nominal"))
+
+    def _on_shutdown_requested(self):
+        self._set_state("idle", "shutting down...")
+        self._append_system_line("Shutting down. Goodbye, sir!")
+        QTimer.singleShot(250, QApplication.instance().quit)
 
     def _start_typing_effect(self, full_text: str):
         self._typing_buffer = full_text

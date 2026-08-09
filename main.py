@@ -33,9 +33,9 @@ else:
 
 # Spotify tools import
 try:
-    from tools.spotify_tools import play_music, pause_music, skip_track, previous_track, get_current_playing_info
+    from tools.spotify_tools import play_music, play_music_smart, pause_music, skip_track, previous_track, get_current_playing_info
 except Exception as e:  # pragma: no cover - runtime fallback
-    play_music = pause_music = skip_track = previous_track = None
+    play_music = play_music_smart = pause_music = skip_track = previous_track = None
     SPOTIFY_IMPORT_ERROR = e
 else:
     SPOTIFY_IMPORT_ERROR = None
@@ -53,7 +53,14 @@ try:
         git_switch_branch,
     )
 except Exception as exc:  # pragma: no cover - runtime fallback
-    git_commit = git_create_branch = git_current_branch = git_delete_branch = git_list_branches = git_switch_branch = None
+    cancel_git_commit = None
+    execute_git_commit = None
+    generate_git_commit_message = None
+    git_create_branch = None
+    git_current_branch = None
+    git_delete_branch = None
+    git_list_branches = None
+    git_switch_branch = None
     GIT_IMPORT_ERROR = exc
 else:
     GIT_IMPORT_ERROR = None
@@ -63,6 +70,7 @@ from utils.helpers import looks_ambiguous
 
 # Global Variable
 PENDING_COMMIT_MSG = None
+EXIT_SIGNAL = object()
 
 # Initialising memory
 if SimpleMemory is not None:
@@ -207,8 +215,7 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
             return cancel_git_commit()
 
         if user_input in ["quit", "exit", "bye"]:
-            # TODO: Add exit for window too
-            raise KeyboardInterrupt
+            return EXIT_SIGNAL
 
         # 1. Send to Router Model
         if route_command is None:
@@ -302,10 +309,14 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
 
 
             case "spotify_play":
-                if play_music is None:
+                if play_music is None and play_music_smart is None:
                     response_text = "Spotify integration is unavailable in this environment."
                 else:
-                    response_text = play_music(query if query else "")
+                    corrected_query = query if query else user_input
+                    if play_music_smart is not None:
+                        response_text = play_music_smart(user_input, corrected_query)
+                    else:
+                        response_text = play_music(corrected_query)
                     if not response_text:
                         response_text = f"Playing music{f': {query}' if query else ''}."
 
