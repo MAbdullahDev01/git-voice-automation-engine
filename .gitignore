@@ -219,3 +219,6 @@ __marimo__/
 
 # Voice models
 voice_models/
+
+# Data
+data/*
