@@ -2,6 +2,10 @@
 import json
 from pathlib import Path
 from utils.groq import call_groq
+from utils.logger import get_logger
+
+# Logging
+logger = get_logger(__name__)
 
 # System prompt for summarization
 SUMMARY_SYSTEM_PROMPT = """
@@ -97,7 +101,7 @@ class SimpleMemory:
             self.history = data.get("history", [])
             self.summary = data.get("summary", "")
         except (json.JSONDecodeError, OSError) as e:
-            print(f"Memory load failed ({e}), starting fresh.")
+            logger.error(f"Memory load failed ({e}), starting fresh.")
 
     def _save(self):
         try:
@@ -106,7 +110,7 @@ class SimpleMemory:
                 encoding="utf-8",
             )
         except OSError as e:
-            print(f"Memory save failed: {e}")
+            logger.error(f"Memory save failed: {e}")
 
     # ---------- summarization ---------- #
 
@@ -121,8 +125,8 @@ class SimpleMemory:
                     smart_model=True,
                     stream=False,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error summarizing memory overflow: {e}")
 
     # ---------- core API ----------
 

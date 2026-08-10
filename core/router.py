@@ -8,6 +8,10 @@ import re
 # =================================
 from core.schemas import CommandPayload
 from utils.groq import call_groq_structured
+from utils.logger import get_logger
+
+# Logging
+logger = get_logger(__name__)
 
 # =================================
 # Router System Prompt
@@ -146,5 +150,5 @@ def route_command(user_input: str, context: str = "") -> dict:
          return {"intent": "general_chat", "query": user_input, "confidence": validated.confidence}
       return validated.model_dump()
    except Exception as e:
-      print(f"Router error: {e}. Falling back to general chat.")
+      logger.error(f"Router error: {e}. Falling back to general chat.")
       return {"intent": "general_chat", "query": user_input, "confidence": 0.0}

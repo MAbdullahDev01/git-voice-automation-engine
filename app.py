@@ -4,6 +4,7 @@ from datetime import datetime
 import math
 import sys
 
+from utils.logger import get_logger
 from PyQt6.QtCore import QEasingCurve, QPoint, QPointF, QPropertyAnimation, Qt, QThread, QTimer, pyqtProperty, pyqtSignal # type: ignore
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QRadialGradient
 from PyQt6.QtWidgets import (
@@ -19,6 +20,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+logger = get_logger(__name__)
 
 BG_DARK = "#05070d"
 BG_PANEL = "#0b1220"
@@ -310,6 +313,7 @@ class PipelineWorker(QThread):
                 result = f"Acknowledged. You said: \u201c{self.user_input}\u201d"
             self.finished.emit(result)
         except Exception as exc:
+            logger.error("Pipeline processing failed: %s", exc)
             self.failed.emit(str(exc))
 
 

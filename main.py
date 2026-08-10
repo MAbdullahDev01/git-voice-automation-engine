@@ -12,6 +12,10 @@ import threading
 # Local imports
 # =================================
 
+# logging
+from utils.logger import get_logger
+logger = get_logger(__name__)
+
 # Core features import
 try:
     from core.jarvis import send_to_jarvis
@@ -20,6 +24,7 @@ except Exception as e:  # pragma: no cover - runtime fallback
     send_to_jarvis = None
     route_command = None
     ROUTER_IMPORT_ERROR = e
+    logger.error("Failed to import router components: %s", e)
 else:
     ROUTER_IMPORT_ERROR = None
 
@@ -28,6 +33,7 @@ try:
     from core.memory import SimpleMemory
 except Exception as e:  # pragma: no cover - runtime fallback
     SimpleMemory = None
+    logger.error("Failed to import memory module: %s", e)
 else:
     MEMORY_IMPORT_ERROR = None
 
@@ -37,6 +43,7 @@ try:
 except Exception as e:  # pragma: no cover - runtime fallback
     play_music = play_music_smart = pause_music = skip_track = previous_track = None
     SPOTIFY_IMPORT_ERROR = e
+    logger.error("Failed to import Spotify tools: %s", e)
 else:
     SPOTIFY_IMPORT_ERROR = None
 
@@ -62,6 +69,7 @@ except Exception as exc:  # pragma: no cover - runtime fallback
     git_list_branches = None
     git_switch_branch = None
     GIT_IMPORT_ERROR = exc
+    logger.error("Failed to import Git tools: %s", exc)
 else:
     GIT_IMPORT_ERROR = None
 
@@ -95,7 +103,7 @@ def stream_and_speak(token_generator, on_chunk=None) -> str:
             try:
                 speak_text(sentence)
             except Exception as exc:
-                print(f"\nSpeech worker error: {exc}")
+                logger.error("Speech worker error: %s", exc)
             finally:
                 speech_queue.task_done()
 
@@ -149,7 +157,7 @@ def speak_text(text: str) -> None:
         from audio.test_piper import speak_neral
         speak_neral(text)
     except Exception as exc:
-        print(f"Speech output unavailable: {exc}")
+        logger.error("Speech output unavailable: %s", exc)
 
 # =================================
 # Listening function
@@ -160,7 +168,7 @@ def listen_for_input() -> str:
         from audio.test_ears import listen_neural
         return listen_neural()
     except Exception as exc:
-        print(f"Speech input unavailable: {exc}")
+        logger.error("Speech input unavailable: %s", exc)
         return ""
 
 # =================================
@@ -220,7 +228,7 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
         # 1. Send to Router Model
         if route_command is None:
             payload = {"intent": "general_chat", "query": user_input}
-            print(f"Router unavailable ({ROUTER_IMPORT_ERROR}). Falling back to general chat.")
+            logger.warning("Router unavailable (%s). Falling back to general chat.", ROUTER_IMPORT_ERROR)
         else:
             payload = route_command(user_input, context=context_for_router)
 
@@ -368,7 +376,7 @@ def process_pipeline(user_input: str, interactive: bool = True, on_chunk=None):
             # =================================
 
             case _:
-                print("Unknown intent. Passing to fallback handler.")
+                logger.warning("Unknown intent. Passing to fallback handler.")
                 prompt_text = query if query else user_input
                 full_prompt = f"{context}\n\nUser: {prompt_text}" if context else prompt_text
                 stream_gen = send_to_jarvis(full_prompt) if send_to_jarvis is not None else "JARVIS model is unavailable in this environment."
@@ -412,7 +420,7 @@ def main(argv=None):
         from PyQt6.QtWidgets import QApplication
         from app import JarvisMainWindow
     except ModuleNotFoundError:
-        print("PyQt6 is not installed. Falling back to CLI mode.")
+        logger.warning("PyQt6 is not installed. Falling back to CLI mode.")
         run_cli()
         return
 

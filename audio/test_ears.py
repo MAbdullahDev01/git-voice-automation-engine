@@ -2,7 +2,12 @@ import speech_recognition as sr
 import keyboard as k
 import time
 
+from utils.logger import get_logger
 from audio.test_piper import speak_neral
+
+# Logging
+logger = get_logger(__name__)
+
 
 def listen_neural() -> str:
     recognizer = sr.Recognizer()
@@ -42,8 +47,8 @@ def listen_neural() -> str:
     try:
         return recognizer.recognize_google(audio_data).strip()
     except sr.UnknownValueError:
-        print("Jarvis: I did not catch that.")
+        logger.error("Speech recognition did not catch the input")
         return ""
-    except sr.RequestError:
-        print("Jarvis: Speech recognition service is unavailable.")
+    except sr.RequestError as exc:
+        logger.error("Speech recognition service is unavailable: %s", exc)
         return ""

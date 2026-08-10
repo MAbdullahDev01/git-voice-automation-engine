@@ -2,9 +2,13 @@
 from rapidfuzz import fuzz
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
+from utils.logger import get_logger
 
 # Importing configuration variables from the config
 from config import SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SPOTIPY_REDIRECT_URI
+
+# Logging
+logger = get_logger(__name__)
 
 # Defining the required Spotify scopes for the application
 SPOTIFY_SCOPES = [
@@ -13,23 +17,29 @@ SPOTIFY_SCOPES = [
     "user-read-currently-playing"
 ]
 
+_spotify_client = None
+
 # Create a Spotify client using the Spotipy library
 def get_spotify_client():
+    global _spotify_client
+    if _spotify_client is not None:
+        return _spotify_client
+    
     if not SPOTIPY_CLIENT_ID or not SPOTIPY_CLIENT_SECRET:
         print("Missing Spotify API credentials in .env file.")
         return None
 
     try:
-        sp = Spotify(auth_manager=SpotifyOAuth(
+        _spotify_client = Spotify(auth_manager=SpotifyOAuth(
             client_id=SPOTIPY_CLIENT_ID,
             client_secret=SPOTIPY_CLIENT_SECRET,
             redirect_uri=SPOTIPY_REDIRECT_URI,
             scope=" ".join(SPOTIFY_SCOPES),
             open_browser=True
         ))
-        return sp
+        return _spotify_client
     except Exception as e:
-        print(f"Error authenticating with Spotify: {e}")
+        logger.error(f"Error authenticating with Spotify: {e}")
         return None
 
 # =================================
@@ -54,7 +64,7 @@ def get_current_playing_info():
 
         return f"Currently playing: '{track_name}' by {artist_name} from the album '{album_name}'."
     except Exception as e:
-        print(f"Spotify Error: {e}")
+        logger.error(f"Spotify Error: {e}")
         return "Error retrieving current playing information."
 
 # Pause music function
@@ -67,6 +77,7 @@ def pause_music():
         sp.pause_playback()
         return "Paused Spotify playback."
     except Exception as e:
+        logger.error(f"Spotify Error: {e}")
         return f"Spotify Error: {e}"
 
 # Play music function
@@ -115,6 +126,7 @@ def previous_track():
         sp.previous_track()
         return "Playing previous track."
     except Exception as e:
+        logger.error(f"Spotify Error: {e}")
         return f"Spotify Error: {e}"
 
 # Skip to next track function
@@ -127,4 +139,5 @@ def skip_track():
         sp.next_track()
         return "Skipped to next track."
     except Exception as e:
+        logger.error(f"Spotify Error: {e}")
         return f"Spotify Error: {e}"
