@@ -77,6 +77,8 @@ def pause_music():
         sp.pause_playback()
         return "Paused Spotify playback."
     except Exception as e:
+        if "401" in str(e) or "token" in str(e).lower():
+            _reset_spotify_client()
         logger.error(f"Spotify Error: {e}")
         return f"Spotify Error: {e}"
 
@@ -141,3 +143,11 @@ def skip_track():
     except Exception as e:
         logger.error(f"Spotify Error: {e}")
         return f"Spotify Error: {e}"
+
+# =============================
+# Helpers
+# =============================
+
+def _reset_spotify_client():
+    global _spotify_client
+    _spotify_client = None
