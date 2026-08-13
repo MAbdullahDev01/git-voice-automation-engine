@@ -5,7 +5,7 @@ import math
 import sys
 
 from utils.logger import get_logger
-from PyQt6.QtCore import QEasingCurve, QPoint, QPointF, QPropertyAnimation, Qt, QThread, QTimer, pyqtProperty, pyqtSignal # type: ignore
+from PyQt6.QtCore import QEasingCurve, QPoint, QPointF, QPropertyAnimation, QRect, Qt, QThread, QTimer, pyqtProperty, pyqtSignal # type: ignore
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QRadialGradient
 from PyQt6.QtWidgets import (
     QApplication,
@@ -22,6 +22,16 @@ from PyQt6.QtWidgets import (
 )
 
 logger = get_logger(__name__)
+
+try:
+    import speech_recognition as sr
+except Exception:  # pragma: no cover - optional runtime dependency
+    sr = None
+
+try:
+    import keyboard
+except Exception:  # pragma: no cover - optional runtime dependency
+    keyboard = None
 
 BG_DARK = "#05070d"
 BG_PANEL = "#0b1220"
@@ -287,11 +297,67 @@ class JarvisHUD(QWidget):
         painter.end()
 
 
+class SpeechCaptureWorker(QThread):
+    result_ready = pyqtSignal(str)
+    error_ready = pyqtSignal(str)
+    stopped = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self._stop_requested = False
+
+    def request_stop(self):
+        self._stop_requested = True
+
+    def run(self):
+        if sr is None:
+            self.error_ready.emit("Speech recognition dependency is unavailable.")
+            self.stopped.emit()
+            return
+
+        try:
+            recognizer = sr.Recognizer()
+            mic = sr.Microphone()
+            audio_chunks = []
+
+            with mic as source:
+                recognizer.adjust_for_ambient_noise(source, duration=0.1)
+                stream = mic.stream
+                while not self._stop_requested:
+                    try:
+                        chunk = stream.read(source.CHUNK)
+                        audio_chunks.append(chunk)
+                    except IOError:
+                        continue
+
+            if not audio_chunks:
+                self.result_ready.emit("")
+                self.stopped.emit()
+                return
+
+            raw_audio = b"".join(audio_chunks)
+            audio_data = sr.AudioData(raw_audio, source.SAMPLE_RATE, source.SAMPLE_WIDTH)
+            try:
+                text = recognizer.recognize_google(audio_data).strip()
+            except sr.UnknownValueError:
+                text = ""
+            except sr.RequestError as exc:
+                logger.error("Speech recognition service is unavailable: %s", exc)
+                text = ""
+
+            self.result_ready.emit(text)
+        except Exception as exc:
+            logger.error("Microphone capture failed: %s", exc)
+            self.error_ready.emit(str(exc))
+        finally:
+            self.stopped.emit()
+
+
 class PipelineWorker(QThread):
     finished = pyqtSignal(str)
     failed = pyqtSignal(str)
     shutdown_requested = pyqtSignal()
-    chunk_received = pyqtSignal(str)   # NEW
+    chunk_received = pyqtSignal(str)
 
     def __init__(self, user_input: str):
         super().__init__()
@@ -304,7 +370,7 @@ class PipelineWorker(QThread):
             result = process_pipeline(
                 self.user_input,
                 interactive=False,
-                on_chunk=self.chunk_received.emit,   # NEW
+                on_chunk=self.chunk_received.emit,
             )
             if result is EXIT_SIGNAL:
                 self.shutdown_requested.emit()
@@ -319,25 +385,33 @@ class PipelineWorker(QThread):
 
 class JarvisMainWindow(QMainWindow):
     WINDOW_W, WINDOW_H = 920, 640
+    RESIZE_MARGIN = 10
 
     def __init__(self):
         super().__init__()
         self._drag_pos = None
         self._worker = None
+        self._speech_worker = None
         self._streaming_started = False
         self._typing_timer = QTimer(self)
         self._typing_timer.timeout.connect(self._type_next_chunk)
         self._typing_buffer = ""
         self._typing_index = 0
+        self._resize_zone = None
+        self._resize_start_geo = None
+        self._is_resizing = False
+        self._hotkey_enabled = False
 
         self._init_window()
         self._build_ui()
         self._set_state("idle")
+        self._install_global_hotkey()
 
     def _init_window(self):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.resize(self.WINDOW_W, self.WINDOW_H)
+        self.setMinimumSize(620, 420)
         self.setStyleSheet(GLOBAL_QSS)
 
     def _build_ui(self):
@@ -358,6 +432,12 @@ class JarvisMainWindow(QMainWindow):
         root_layout.addWidget(body)
 
         self.setCentralWidget(root)
+        self._root_frame = root
+        self._root_frame.setMouseTracking(True)
+        self._root_frame.mousePressEvent = self._root_mouse_press  # type: ignore
+        self._root_frame.mouseMoveEvent = self._root_mouse_move  # type: ignore
+        self._root_frame.mouseReleaseEvent = self._root_mouse_release  # type: ignore
+        self._root_frame.leaveEvent = self._root_leave_event  # type: ignore
 
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(40)
@@ -405,6 +485,144 @@ class JarvisMainWindow(QMainWindow):
         if self._drag_pos is not None and event.buttons() == Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self._drag_pos)
             event.accept()
+
+    def _resize_zone_for_pos(self, pos: QPoint):
+        rect = self._root_frame.rect()
+        if rect.isEmpty():
+            return None
+
+        margin = self.RESIZE_MARGIN
+        x, y = pos.x(), pos.y()
+        w, h = rect.width(), rect.height()
+
+        if x <= margin and y <= margin:
+            return "top-left"
+        if x >= w - margin and y <= margin:
+            return "top-right"
+        if x <= margin and y >= h - margin:
+            return "bottom-left"
+        if x >= w - margin and y >= h - margin:
+            return "bottom-right"
+        if x <= margin:
+            return "left"
+        if x >= w - margin:
+            return "right"
+        if y <= margin:
+            return "top"
+        if y >= h - margin:
+            return "bottom"
+        return None
+
+    def _cursor_for_resize_zone(self, zone):
+        cursor_map = {
+            "top": Qt.CursorShape.SizeVerCursor,
+            "bottom": Qt.CursorShape.SizeVerCursor,
+            "left": Qt.CursorShape.SizeHorCursor,
+            "right": Qt.CursorShape.SizeHorCursor,
+            "top-left": Qt.CursorShape.SizeFDiagCursor,
+            "top-right": Qt.CursorShape.SizeBDiagCursor,
+            "bottom-left": Qt.CursorShape.SizeBDiagCursor,
+            "bottom-right": Qt.CursorShape.SizeFDiagCursor,
+        }
+        return cursor_map.get(zone, Qt.CursorShape.ArrowCursor)
+
+    def _constrained_resize_geometry(self, width: int, height: int, zone: str):
+        base = self.frameGeometry()
+        min_w = max(self.minimumWidth(), 1)
+        min_h = max(self.minimumHeight(), 1)
+        width = max(width, min_w)
+        height = max(height, min_h)
+
+        if zone == "top-left":
+            return QRect(base.right() - width, base.bottom() - height, width, height)
+        if zone == "top-right":
+            return QRect(base.left(), base.bottom() - height, width, height)
+        if zone == "bottom-left":
+            return QRect(base.right() - width, base.top(), width, height)
+        if zone == "bottom-right":
+            return QRect(base.left(), base.top(), width, height)
+        if zone == "left":
+            return QRect(base.right() - width, base.top(), width, base.height())
+        if zone == "right":
+            return QRect(base.left(), base.top(), width, base.height())
+        if zone == "top":
+            return QRect(base.left(), base.bottom() - height, base.width(), height)
+        if zone == "bottom":
+            return QRect(base.left(), base.top(), base.width(), height)
+        return QRect(base)
+
+    def _root_mouse_press(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+
+        zone = self._resize_zone_for_pos(event.position().toPoint())
+        if zone is None:
+            return
+
+        self._is_resizing = True
+        self._resize_zone = zone
+        self._resize_start_geo = self.frameGeometry()
+        self.setCursor(self._cursor_for_resize_zone(zone))
+        event.accept()
+
+    def _root_mouse_move(self, event):
+        pos = event.position().toPoint()
+        if self._is_resizing and self._resize_zone and self._resize_start_geo is not None:
+            self._apply_resize(event.globalPosition().toPoint())
+            event.accept()
+            return
+
+        zone = self._resize_zone_for_pos(pos)
+        if zone is not None:
+            self.setCursor(self._cursor_for_resize_zone(zone))
+        else:
+            self.unsetCursor()
+        event.accept()
+
+    def _root_mouse_release(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._is_resizing = False
+            self._resize_zone = None
+            self._resize_start_geo = None
+            self.unsetCursor()
+            event.accept()
+
+    def _root_leave_event(self, event):
+        self.unsetCursor()
+        super().leaveEvent(event)
+
+    def _apply_resize(self, global_pos: QPoint):
+        if not self._resize_zone or self._resize_start_geo is None:
+            return
+
+        zone = self._resize_zone
+        start = self._resize_start_geo
+        min_w = max(self.minimumWidth(), 1)
+        min_h = max(self.minimumHeight(), 1)
+        current = QRect(start)
+
+        if zone in {"left", "top-left", "bottom-left"}:
+            new_left = min(global_pos.x(), start.right() - min_w)
+            if new_left < start.right() - min_w:
+                current.setLeft(new_left)
+            else:
+                current.setLeft(start.right() - min_w)
+        if zone in {"right", "top-right", "bottom-right"}:
+            new_right = max(global_pos.x(), start.left() + min_w)
+            current.setRight(new_right)
+        if zone in {"top", "top-left", "top-right"}:
+            new_top = min(global_pos.y(), start.bottom() - min_h)
+            current.setTop(new_top)
+        if zone in {"bottom", "bottom-left", "bottom-right"}:
+            new_bottom = max(global_pos.y(), start.top() + min_h)
+            current.setBottom(new_bottom)
+
+        if current.width() < min_w:
+            current.setWidth(min_w)
+        if current.height() < min_h:
+            current.setHeight(min_h)
+
+        self.setGeometry(current)
 
     def _build_side_panel(self):
         panel = QFrame()
@@ -533,8 +751,8 @@ class JarvisMainWindow(QMainWindow):
         )
         self.log_output.append("")
 
-    def _send_command(self):
-        text = self.input_field.text().strip()
+    def _submit_command_text(self, text: str):
+        text = text.strip()
         if not text or (self._worker and self._worker.isRunning()):
             return
 
@@ -542,14 +760,70 @@ class JarvisMainWindow(QMainWindow):
         self.input_field.clear()
         self._set_state("processing", "analyzing request...")
 
-        self._streaming_started = False   # NEW: track whether we already streamed text live
+        self._streaming_started = False
 
         self._worker = PipelineWorker(text)
-        self._worker.chunk_received.connect(self._on_chunk_received)   # NEW
+        self._worker.chunk_received.connect(self._on_chunk_received)
         self._worker.shutdown_requested.connect(self._on_shutdown_requested)
         self._worker.finished.connect(self._on_pipeline_finished)
         self._worker.failed.connect(self._on_pipeline_failed)
         self._worker.start()
+
+    def _send_command(self):
+        self._submit_command_text(self.input_field.text())
+
+    def _install_global_hotkey(self):
+        if self._hotkey_enabled or keyboard is None:
+            return
+
+        try:
+            keyboard.add_hotkey("ctrl+shift+space", self._hotkey_capture_started, suppress=False)
+            keyboard.on_release_key("space", self._hotkey_capture_stopped)
+            self._hotkey_enabled = True
+        except Exception as exc:
+            logger.warning("Global hotkey unavailable: %s", exc)
+
+    def _hotkey_capture_started(self):
+        if self._speech_worker is not None and self._speech_worker.isRunning():
+            return
+
+        QTimer.singleShot(0, self._begin_capture_from_hotkey)
+
+    def _hotkey_capture_stopped(self, event):
+        if getattr(event, "name", None) != "space":
+            return
+        if keyboard is not None and keyboard.is_pressed("ctrl") and keyboard.is_pressed("shift"):
+            QTimer.singleShot(0, self._stop_capture_from_hotkey)
+
+    def _begin_capture_from_hotkey(self):
+        self._speech_worker = SpeechCaptureWorker()
+        self._speech_worker.result_ready.connect(self._on_hotkey_transcription)
+        self._speech_worker.error_ready.connect(self._on_hotkey_capture_error)
+        self._speech_worker.stopped.connect(self._on_hotkey_capture_stopped)
+        self._set_state("listening", "microphone live...")
+        self._speech_worker.start()
+
+    def _stop_capture_from_hotkey(self):
+        if self._speech_worker is None or not self._speech_worker.isRunning():
+            return
+        self._speech_worker.request_stop()
+        self._set_state("processing", "transcribing audio...")
+
+    def _on_hotkey_transcription(self, text: str):
+        if not text.strip():
+            self._set_state("idle", "core temperature nominal")
+            return
+        self._submit_command_text(text)
+
+    def _on_hotkey_capture_error(self, error: str):
+        self._set_state("error", "microphone unavailable")
+        self._append_system_line(f"Speech capture error: {error}")
+        QTimer.singleShot(2000, lambda: self._set_state("idle", "core temperature nominal"))
+
+    def _on_hotkey_capture_stopped(self):
+        if self._speech_worker is not None and self._speech_worker.isRunning():
+            return
+        self._speech_worker = None
 
     def _on_chunk_received(self, chunk: str):
         if not self._streaming_started:
