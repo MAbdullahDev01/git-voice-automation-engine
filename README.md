@@ -175,6 +175,9 @@ python main.py --window
 
 Launches the frameless PyQt6 HUD. Type a command or question and press Enter/**SEND**. Responses stream live into the chat panel with a state-reactive glow (idle → processing → speaking).
 
+- Use the window voice hotkey: hold **Ctrl + Shift** and press **Space** to start listening.
+- Keep **Ctrl + Shift** held while speaking, then release **Space** to stop and transcribe.
+
 ### Terminal CLI
 
 ```powershell
