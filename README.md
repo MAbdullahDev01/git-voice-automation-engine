@@ -158,7 +158,7 @@ Create a `.env` file in the project root (it is gitignored, so your keys are nev
 # Groq API
 GROQ_API_KEY=your_groq_api_key
 GROQ_FAST_MODEL=llama-3.1-8b-instant
-GROQ_SMART_MODEL=llama-3.3-70b-versatile
+GROQ_SMART_MODEL=openai/gpt-oss-120b
 GROQ_FAST_STRUCTURED_MODEL=openai/gpt-oss-20b
 GROQ_SMART_STRUCTURED_MODEL=openai/gpt-oss-120b
 
