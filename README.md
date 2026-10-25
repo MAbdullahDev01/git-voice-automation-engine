@@ -4,6 +4,10 @@ A voice-first, LLM-powered desktop assistant for Python developers. JARVIS route
 
 Built around a Groq-hosted LLM pipeline with strict JSON-schema structured outputs, a confidence-gated intent router, rolling conversational memory, and a frameless PyQt6 HUD interface.
 
+<!-- Add a screenshot or short demo GIF of the HUD here, for example:
+![JARVIS HUD](docs/hud.png)
+Save the image in a docs/ folder, then uncomment the line above. -->
+
 ---
 
 ## Table of Contents
@@ -24,6 +28,7 @@ Built around a Groq-hosted LLM pipeline with strict JSON-schema structured outpu
   - [Memory](#memory)
   - [Spotify Integration](#spotify-integration)
   - [Git Automation](#git-automation)
+  - [Known Limitations](#known-limitations)
   - [Roadmap](#roadmap)
   - [Contributing](#contributing)
   - [License](#license)
@@ -38,7 +43,7 @@ Built around a Groq-hosted LLM pipeline with strict JSON-schema structured outpu
 - **Streaming chat responses** — general conversation streams token-by-token to the terminal, the desktop UI, and a sentence-level text-to-speech queue simultaneously.
 - **Voice input & output** — push-to-talk microphone capture (Google Speech Recognition) and local neural TTS via Piper.
 - **Rolling conversational memory** — recent turns are kept verbatim; older turns are collapsed into a compact LLM-generated summary and persisted to disk as JSON.
-- **Git automation** — AI-generated Conventional Commit messages from the staged diff, plus branch create/switch/delete/list, with a confirm-before-push safety step.
+- **Git automation** — AI-generated Conventional Commit messages from the staged diff, plus branch create/switch/delete/list, with an explicit confirmation step before the commit and push.
 - **Spotify playback control** — play, pause, skip, previous, and "what's playing" commands, with fuzzy-matched search (via `rapidfuzz`) across raw and LLM-corrected queries to handle imperfect transliteration/STT output.
 - **Animated desktop HUD** — a frameless, custom-painted PyQt6 window with a state-reactive glowing HUD widget (idle / listening / processing / speaking / error), draggable title bar, and live-streaming chat log.
 
@@ -114,10 +119,11 @@ Built around a Groq-hosted LLM pipeline with strict JSON-schema structured outpu
 ## Requirements
 
 - Python 3.12+
+- Windows. The project was developed on Windows, and the installation steps below use PowerShell. Other platforms are untested.
 - A working microphone and speakers/headphones (for voice mode)
 - A [Groq API key](https://console.groq.com/)
-- A Piper voice model (`.onnx` + `.onnx.json`) placed in `voice_models/`
-- *(Optional)* Spotify Developer app credentials, for playback control
+- A Piper voice model (`.onnx` + `.onnx.json`) placed in `voice_models/`. Piper voices are published at [huggingface.co/rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices); the default configuration below uses `en_GB-alan-medium`.
+- *(Optional)* Spotify Developer app credentials, for playback control. Spotify's playback-control API requires a Premium account.
 
 Core dependencies (see `requirements.txt` for the full list):
 
@@ -128,19 +134,25 @@ Core dependencies (see `requirements.txt` for the full list):
 ## Installation
 
 ```powershell
-# 1. Create and activate a virtual environment
+# 1. Clone the repository
+git clone https://github.com/MAbdullahDev01/git-voice-automation-engine.git
+cd git-voice-automation-engine
+
+# 2. Create and activate a virtual environment
 py -3.12 -m venv venv
 .\venv\Scripts\Activate.ps1
 
-# 2. Install dependencies
+# 3. Install dependencies
 pip install -r requirements.txt
 ```
+
+Then create the `.env` file described below and place your Piper voice model in `voice_models/`.
 
 ---
 
 ## Configuration
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (it is gitignored, so your keys are never committed):
 
 ```env
 # Groq API
@@ -225,7 +237,7 @@ what does this repo do?
 1. **Deterministic pre-filter** — a small set of regex rules in `core/router.py` catches unambiguous commands (`pause`, `skip`, `current branch`, `list branches`) instantly, without an LLM call.
 2. **LLM classification** — everything else is sent to a Groq structured-output call, guided by a system prompt with explicit disambiguation rules and few-shot examples (e.g. distinguishing "this song is good" from "play this song").
 3. **Schema validation** — the response is validated against the `CommandPayload` Pydantic model (`intent`, `query`, `confidence`).
-4. **Confidence gate** — if `confidence` falls below the configured threshold (`0.6`) and the classified intent isn't already `general_chat`, the router demotes the request to `general_chat` rather than risk executing the wrong action.
+4. **Confidence gate** — if `confidence` falls below the configured threshold (`0.6`) and the classified intent isn't already `general_chat`, the router demotes the request to `general_chat` rather than risk executing the wrong action. This reduces unintended actions but cannot guarantee that a classification is correct.
 
 ---
 
@@ -236,6 +248,8 @@ what does this repo do?
 - Keeps the last N conversational turns (default 5) verbatim for context.
 - When the buffer overflows, folds the oldest turns into a compact rolling summary using a dedicated LLM prompt tuned to preserve named entities, stated preferences/corrections, and open questions — while discarding filler and tool-execution noise.
 - Persists both the recent history and the running summary to `data/memory_<session_id>.json`, so context survives across restarts.
+
+Memory is conversational: the model reads it as a transcript and decides what is relevant. It does not yet keep an explicit, structured record of facts. See [Known Limitations](#known-limitations).
 
 ---
 
@@ -262,13 +276,26 @@ This dual-query approach exists specifically to handle romanized Urdu/Hindi and 
 
 ---
 
+## Known Limitations
+
+JARVIS is a personal project built incrementally, and these are the problems I know about:
+
+- **Memory can resolve a reference to the wrong item.** Memory is a transcript of recent turns plus a rolling summary, and the router receives it when a request looks ambiguous. When several songs or entities have come up, the model has to decide which one a phrase like "that song" or "my favorite" refers to. In one observed case, I told JARVIS my favorite song and, after another track was mentioned, asked it to play my favorite. It played the most recently mentioned track instead. The planned fix is explicit structured memory rather than inference from the transcript (see [Roadmap](#roadmap)).
+- **The confidence gate is a safeguard, not a guarantee.** It demotes low-confidence classifications to plain chat, but a confident misclassification can still pass through.
+- **`git_commit` pushes immediately after committing**, once you confirm. Making the push optional is on the roadmap.
+- **Speech and text can fall out of order.** For some non-streamed replies, the audio starts before the text appears in the window. Streamed chat responses are not affected.
+- **Windows only, as far as I have tested.** Spotify playback control also requires a Premium account.
+
+---
+
 ## Roadmap
 
+- [ ] Two-layer structured memory: session state with explicit slots (`favorite_song`, `last_played_track`, `current_git_branch`, ...) updated from user statements and tool results rather than inferred by the LLM, plus persistent storage for selected facts across restarts
 - [ ] Persist memory to SQLite once the data shape stabilizes (currently JSON)
-- [ ] Deterministic slot-memory dict (`last_played_track`, `current_git_branch`, ...) updated directly from tool results rather than inferred by the LLM
 - [ ] Swap the routing model to a stronger model and split classification from query normalization into two focused calls
 - [ ] Fixed labeled regression test set to catch router drift over time
 - [ ] Make `git_commit`'s auto-push after commit optional/configurable
+- [ ] Fix the speech/text ordering for non-streamed replies
 - [ ] PC automation agent — screen/mouse control via computer vision + a multimodal LLM (PyAutoGUI-driven), planned for after the current fix pass
 
 ---
