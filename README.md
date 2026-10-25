@@ -4,9 +4,7 @@ A voice-first, LLM-powered desktop assistant for Python developers. JARVIS route
 
 Built around a Groq-hosted LLM pipeline with strict JSON-schema structured outputs, a confidence-gated intent router, rolling conversational memory, and a frameless PyQt6 HUD interface.
 
-<!-- Add a screenshot or short demo GIF of the HUD here, for example:
-![JARVIS HUD](docs/hud.png)
-Save the image in a docs/ folder, then uncomment the line above. -->
+[JARVIS HUD](docs/hud.png)
 
 ---
 
